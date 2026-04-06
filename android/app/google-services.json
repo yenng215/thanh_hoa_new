@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "264365578027",
+    "project_id": "thanhhoa-ebc68",
+    "storage_bucket": "thanhhoa-ebc68.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:264365578027:android:8324a6349b8669cdf2576e",
+        "android_client_info": {
+          "package_name": "com.example.admin_chatbot_ai_thanh_hoa"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "264365578027-ipbk2acbv9fit3rqa7t115crur2to3rf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPl6b6geVQcW7gjziFYIxt_lDCNmyqIaE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "264365578027-ipbk2acbv9fit3rqa7t115crur2to3rf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:264365578027:android:897608c255b8c576f2576e",
+        "android_client_info": {
+          "package_name": "com.example.thanh_hoa_new"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "264365578027-ipbk2acbv9fit3rqa7t115crur2to3rf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPl6b6geVQcW7gjziFYIxt_lDCNmyqIaE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "264365578027-ipbk2acbv9fit3rqa7t115crur2to3rf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:264365578027:android:4723bd3dd6d69ca5f2576e",
+        "android_client_info": {
+          "package_name": "com.example.thanh_hoa_travel_assistant"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "264365578027-qk67gri1smuis1nl9ivhlm560fupja2t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.thanh_hoa_travel_assistant",
+            "certificate_hash": "cbf58216260ff2f65706cca4d88b702461473d4b"
+          }
+        },
+        {
+          "client_id": "264365578027-ipbk2acbv9fit3rqa7t115crur2to3rf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPl6b6geVQcW7gjziFYIxt_lDCNmyqIaE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "264365578027-ipbk2acbv9fit3rqa7t115crur2to3rf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Q&A DATA (CHATBOT) =====
+    match /qa_data_dulich/{docId} {
+      allow read: if true;        // ✅ Cho phép đọc (chatbot)
+      allow write: if 
+        // ✅ Chỉ admin mới được ghi
+        request.auth != null && 
+        request.auth.token.admin == true;
+    }    // ❌ Không cho ghi từ app
+    
+ // ===== ADMIN USERS COLLECTION =====
+    match /admin_users/{userId} {
+      allow read: if request.auth != null && 
+                     request.auth.token.admin == true;
+      allow write: if false;  // Chỉ set từ Admin SDK/Console
+    }
+    // ===== USER CHAT HISTORY =====
+    match /users/{userId}/sessions/{sessionId} {
+      allow read, write: if request.auth != null
+                          && request.auth.uid == userId;
+
+      match /messages/{msgId} {
+        allow read, write: if request.auth != null
+                            && request.auth.uid == userId;
+      }
+    }
+    // ===== 🌟 THÊM MỚI: USER SETTINGS =====
+    match /users/{userId}/settings/{settingId} {
+      allow read, write: if request.auth != null 
+                          && request.auth.uid == userId;
+    }
+    // ===== FEEDBACK =====
+    match /feedback/{docId} {
+      // Cho phép user đã đăng nhập tạo feedback mới
+      allow create: if request.auth != null;
+      
+      // Không cho phép đọc, sửa, xóa (chỉ admin mới đọc qua console)
+      allow read, update, delete: if false;
+    }
+  }
+  }
+

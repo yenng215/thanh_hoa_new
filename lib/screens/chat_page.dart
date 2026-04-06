@@ -1,0 +1,494 @@
+// lib/screens/chat_page.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/chatbot_service.dart';
+import '../services/history_service.dart';
+import '../widgets/chat_bubble.dart';
+import '../widgets/input_field.dart';
+import '../auth/auth_service.dart';
+import 'trang_menu.dart';
+
+class ChatPage extends StatefulWidget {
+  final String? sessionId;
+
+  const ChatPage({super.key, this.sessionId});
+
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin {
+  final ChatbotService _chatbotService = ChatbotService();
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  List<Map<String, dynamic>> _messages = [];
+  bool _isLoading = false;
+  String? _currentSessionId;
+  bool _isTyping = false;
+  bool _hasSavedToHistory = false; // Đánh dấu đã lưu vào lịch sử chưa
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeChat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeChat() async {
+    if (widget.sessionId != null) {
+      _currentSessionId = widget.sessionId;
+      _hasSavedToHistory = true; // Session cũ đã có trong lịch sử
+      await _loadChatHistory();
+    } else {
+      _currentSessionId = await _chatbotService.createNewSession();
+      // Không lưu vào lịch sử vì chưa có tin nhắn
+      _hasSavedToHistory = false;
+    }
+  }
+
+  Future<void> _loadChatHistory() async {
+    if (_currentSessionId == null) return;
+
+    final history = await _chatbotService.getChatHistory(_currentSessionId!);
+    setState(() {
+      _messages = history;
+    });
+    _scrollToBottom();
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _isLoading || _isTyping) return;
+
+    // Nếu chưa lưu vào lịch sử và đây là tin nhắn đầu tiên
+    if (!_hasSavedToHistory && _messages.isEmpty) {
+      // Lưu session vào lịch sử với tiêu đề là câu hỏi đầu tiên
+      // Thành:
+      await _chatbotService.saveSessionToHistory(
+        sessionId: _currentSessionId!,
+        title: text,
+      );
+
+      _hasSavedToHistory = true;
+    }
+
+    // Thêm tin nhắn người dùng
+    final userMessage = {
+      'text': text,
+      'isUser': true,
+      'created': DateTime.now().toIso8601String(),
+      'timestamp': DateTime.now(),
+    };
+
+    setState(() {
+      _messages.add(userMessage);
+      _controller.clear();
+      _isLoading = true;
+      _isTyping = true;
+    });
+
+    _scrollToBottom();
+
+    // Lưu tin nhắn người dùng
+    await _chatbotService.saveMessage(
+      sessionId: _currentSessionId!,
+      text: text,
+      isUser: true,
+    );
+
+    try {
+      // Tạo phản hồi
+      final response = await _chatbotService.generateResponse(
+        question: text,
+        sessionId: _currentSessionId!,
+      );
+
+      // Xử lý MAP tag
+      String? mapDestination;
+      String finalResponse = response;
+
+      final mapRegex = RegExp(r'\[MAP:(.+?)\]');
+      final match = mapRegex.firstMatch(response);
+      if (match != null) {
+        mapDestination = match.group(1);
+        finalResponse = response.replaceAll(mapRegex, '').trim();
+      }
+
+      // Thêm tin nhắn bot
+      final botMessage = {
+        'text': finalResponse,
+        'isUser': false,
+        'created': DateTime.now().toIso8601String(),
+        'mapDestination': mapDestination,
+        'timestamp': DateTime.now(),
+      };
+
+      setState(() {
+        _messages.add(botMessage);
+        _isTyping = false;
+      });
+
+      // Lưu tin nhắn bot
+      await _chatbotService.saveMessage(
+        sessionId: _currentSessionId!,
+        text: finalResponse,
+        isUser: false,
+        mapDestination: mapDestination,
+      );
+
+      _scrollToBottom();
+    } catch (e) {
+      setState(() {
+        _isTyping = false;
+      });
+
+      final errorMessage = {
+        'text': 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.',
+        'isUser': false,
+        'created': DateTime.now().toIso8601String(),
+        'timestamp': DateTime.now(),
+      };
+
+      setState(() {
+        _messages.add(errorMessage);
+      });
+
+      await _chatbotService.saveMessage(
+        sessionId: _currentSessionId!,
+        text: errorMessage['text'] as String,
+        isUser: false,
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7FFFE),
+      drawer: const TrangMenu(),
+
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF7FFFE),
+        elevation: 0,
+        centerTitle: true,
+        leading: widget.sessionId != null
+        // Mở từ lịch sử → hiện nút back
+            ? Padding(
+          padding: const EdgeInsets.all(6),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF9B89FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            ),
+          ),
+        )
+        // Chat mới → hiện nút menu như bình thường
+            : Builder(
+          builder: (context) => Padding(
+            padding: const EdgeInsets.all(6),
+            child: GestureDetector(
+              onTap: () => Scaffold.of(context).openDrawer(),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9B89FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.menu, color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('lib/assets/logo.png', width: 32, height: 32,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9B89FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.travel_explore, color: Colors.white, size: 20),
+                );
+              },
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Thanh Hóa",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  "Travel Assistant",
+                  style: TextStyle(
+                    color: Color(0xFF9B89FF),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+
+      body: Column(
+        children: [
+          if (_isLoading) const LinearProgressIndicator(),
+
+          Expanded(
+            child: _messages.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(top: 8),
+              itemCount: _messages.length + (_isTyping ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (_isTyping && index == _messages.length) {
+                  return _buildTypingIndicator();
+                }
+
+                final msg = _messages[index];
+                return ChatBubble(
+                  text: msg['text'],
+                  isUser: msg['isUser'],
+                  mapDestination: msg['mapDestination'],
+                  timestamp: msg['timestamp'] != null
+                      ? (msg['timestamp'] is DateTime
+                      ? msg['timestamp']
+                      : DateTime.parse(msg['timestamp']))
+                      : null,
+                );
+              },
+            ),
+          ),
+
+          InputField(
+            controller: _controller,
+            onSend: _sendMessage,
+            isLoading: _isLoading || _isTyping,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFFFE4F7),
+                  Color(0xFFFFC0E4),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(
+                color: const Color(0xFFFFC0E4).withOpacity(0.5),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFC0E4).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Image.asset(
+                'lib/assets/logo.png',
+                width: 24,
+                height: 24,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(
+                    Icons.smart_toy,
+                    color: Color(0xFF9B89FF),
+                    size: 20,
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              constraints: const BoxConstraints(maxWidth: 100),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE4F7),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                  bottomLeft: Radius.circular(0),
+                  bottomRight: Radius.circular(20),
+                ),
+              ),
+              child: const _TypingDots(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Image.asset('lib/assets/logo.png', width: 80, height: 80),
+          const SizedBox(height: 10),
+          Text(
+            "Chào mừng bạn đến với\nThanh Hóa Travel Assistant!",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Hãy nhập câu hỏi để bắt đầu nhé!",
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TypingDots extends StatefulWidget {
+  const _TypingDots();
+
+  @override
+  State<_TypingDots> createState() => __TypingDotsState();
+}
+
+class __TypingDotsState extends State<_TypingDots> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late List<Animation<double>> _animations;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+
+    _animations = List.generate(3, (index) {
+      return Tween<double>(
+        begin: 0.0,
+        end: 1.0,
+      ).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Interval(
+            index * 0.15,
+            index * 0.15 + 0.5,
+            curve: Curves.easeInOut,
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildDot(0),
+            const SizedBox(width: 4),
+            _buildDot(1),
+            const SizedBox(width: 4),
+            _buildDot(2),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDot(int index) {
+    double yOffset = 0;
+
+    if (_animations[index].value < 0.5) {
+      yOffset = -8 * (_animations[index].value * 2);
+    } else {
+      yOffset = -8 * (2 - _animations[index].value * 2);
+    }
+
+    return Transform.translate(
+      offset: Offset(0, yOffset),
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          color: Color(0xFF9B89FF),
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}

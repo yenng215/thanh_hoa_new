@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../config/api_keys.dart';
 import '../models/qa_model.dart';
 import '../services/context_service.dart';
@@ -7,6 +9,112 @@ import '../services/location_extractor.dart';
 
 class GeminiService {
   static const String baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+  // Endpoint cho Gemini Vision (multimodal)
+  static const String visionUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
+
+  // 📸 Phân tích ảnh với Gemini Vision
+  // 📸 Phân tích ảnh với Gemini Vision
+  Future<String> analyzeImage({
+    required File image,
+    List<Map<String, dynamic>>? chatHistory,
+    String? question,
+  }) async {
+    try {
+      final bytes = await image.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      final mimeType = _getMimeType(image.path);
+
+      String prompt = """
+BẠN LÀ TRỢ LÝ DU LỊCH THANH HÓA THÔNG MINH.
+
+=== NHIỆM VỤ ===
+Hãy phân tích hình ảnh mà người dùng vừa gửi và trả lời bằng tiếng Việt.
+
+=== HƯỚNG DẪN PHÂN TÍCH ===
+1. NHẬN DIỆN NỘI DUNG CHÍNH TRONG ẢNH:
+   - Nếu là cảnh quan thiên nhiên: xác định đó có thể là địa điểm du lịch nào ở Thanh Hóa (biển, núi, rừng, thác, suối...)
+   - Nếu là công trình kiến trúc: có thể là đền, chùa, di tích lịch sử nào
+   - Nếu là món ăn: đó có thể là đặc sản gì của Thanh Hóa
+   - Nếu là con người: đang làm gì, có liên quan đến du lịch không
+
+2. GIỚI THIỆU THÔNG TIN HỮU ÍCH:
+   - Nếu ảnh liên quan đến địa điểm du lịch: giới thiệu tên, vị trí, đặc điểm nổi bật
+   - Nếu ảnh liên quan đến món ăn: giới thiệu tên món, nơi bán ngon, giá cả tham khảo
+   - Nếu không rõ: nói "Tôi chưa nhận diện được rõ, bạn có thể cho tôi biết thêm về bức ảnh này được không?"
+
+3. TƯ VẤN THÊM:
+   - Thời điểm thích hợp để đến tham quan (nếu là địa điểm)
+   - Các hoạt động có thể làm tại đó
+   - Lưu ý khi đi du lịch
+
+=== QUY TẮC ===
+• KHÔNG BỊA ĐẶT thông tin. Nếu không chắc chắn, hãy nói "Có thể đây là [tên địa điểm gần giống]..."
+• Trả lời thân thiện, tự nhiên như đang trò chuyện
+• Nếu nhận diện được chính xác địa điểm nổi tiếng ở Thanh Hóa, hãy nhiệt tình giới thiệu
+• Độ dài câu trả lời: 2-4 câu là đủ, không cần quá dài
+
+HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
+""";
+
+      final requestBody = {
+        "contents": [
+          {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": mimeType,
+                  "data": base64Image
+                }
+              },
+              {
+                "text": prompt
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "temperature": 0.7,
+          "maxOutputTokens": 1024,
+          "topP": 0.95,
+          "topK": 40
+        }
+      };
+
+      print('📸 Đang gửi ảnh lên Gemini Vision...');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl?key=${ApiKeys.gemini}'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final result = data['candidates'][0]['content']['parts'][0]['text'];
+        print('✅ Gemini Vision phân tích ảnh thành công');
+        return result;
+      } else {
+        print('❌ Lỗi Gemini Vision: ${response.statusCode}');
+        return 'Xin lỗi, tôi không thể xử lý hình ảnh này. Vui lòng thử lại sau.';
+      }
+    } catch (e) {
+      print('❌ Exception trong analyzeImage: $e');
+      return 'Xin lỗi, tôi không thể xử lý hình ảnh này. Vui lòng thử lại.';
+    }
+  }
+
+  String _getMimeType(String path) {
+    if (path.toLowerCase().endsWith('.png')) return 'image/png';
+    if (path.toLowerCase().endsWith('.jpg') || path.toLowerCase().endsWith('.jpeg')) return 'image/jpeg';
+    if (path.toLowerCase().endsWith('.gif')) return 'image/gif';
+    if (path.toLowerCase().endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+  String _getImageFallbackResponse() {
+    return "Xin lỗi, tôi không thể xử lý hình ảnh này. "
+        "Vui lòng thử lại với hình ảnh rõ nét hơn hoặc nhập câu hỏi bằng văn bản. "
+        "Tôi sẵn sàng giúp bạn về du lịch Thanh Hóa! 🌟";
+  }
 
   Future<String> generateSmartResponse({
     required String question,

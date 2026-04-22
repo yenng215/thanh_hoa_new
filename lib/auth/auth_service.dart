@@ -17,7 +17,11 @@ class AuthService extends ChangeNotifier {
 
   User? get currentUser => _currentUser;
   bool get isLoggedIn => _currentUser != null;
-
+  Future<void> refreshUser() async {
+    await _auth.currentUser?.reload();
+    _currentUser = _auth.currentUser;
+    notifyListeners(); // 👈 Quan trọng: cập nhật UI ngay lập tức
+  }
   // Đăng ký với Email/Password
   Future<UserCredential> registerWithEmail(String email, String password) async {
     try {

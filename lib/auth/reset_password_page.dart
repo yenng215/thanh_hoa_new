@@ -60,6 +60,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true, // 👈 THÊM DÒNG NÀY - Tự động resize khi bàn phím hiện
       backgroundColor: const Color(0xFFF7FFFE),
       appBar: AppBar(
         leading: IconButton(
@@ -71,7 +72,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(  // 👈 BỌC SingleChildScrollView
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,6 +111,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                 key: _formKey,
                 child: TextFormField(
                   controller: _emailController,
+                  style: const TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     labelText: 'Email',
                     prefixIcon: const Icon(Icons.email, color: Color(0xFF9B89FF)),
@@ -120,6 +122,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     fillColor: Colors.white,
                   ),
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done, // 👈 THÊM DÒNG NÀY
+                  onFieldSubmitted: (_) => _sendResetEmail(), // 👈 THÊM DÒNG NÀY - Nhấn Done trên bàn phím
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Vui lòng nhập email';
@@ -159,6 +163,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   ),
                 ),
               ),
+              // 👈 THÊM KHOẢNG TRỐNG Ở DƯỚI ĐỂ CUỘN
+              const SizedBox(height: 40),
             ],
           ),
         ),

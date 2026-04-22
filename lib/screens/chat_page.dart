@@ -1,4 +1,6 @@
 // lib/screens/chat_page.dart
+
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/chatbot_service.dart';
@@ -26,7 +28,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   bool _isLoading = false;
   String? _currentSessionId;
   bool _isTyping = false;
-  bool _hasSavedToHistory = false; // Đánh dấu đã lưu vào lịch sử chưa
+  bool _hasSavedToHistory = false;
 
   @override
   void initState() {
@@ -44,11 +46,10 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   Future<void> _initializeChat() async {
     if (widget.sessionId != null) {
       _currentSessionId = widget.sessionId;
-      _hasSavedToHistory = true; // Session cũ đã có trong lịch sử
+      _hasSavedToHistory = true;
       await _loadChatHistory();
     } else {
       _currentSessionId = await _chatbotService.createNewSession();
-      // Không lưu vào lịch sử vì chưa có tin nhắn
       _hasSavedToHistory = false;
     }
   }
@@ -63,23 +64,107 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     _scrollToBottom();
   }
 
+  Future<void> _sendImage(File image, {String? question}) async {
+    if (_isLoading || _isTyping) return;
+
+    if (!_hasSavedToHistory && _messages.isEmpty) {
+      await _chatbotService.saveSessionToHistory(
+        sessionId: _currentSessionId!,
+        title: question?.isNotEmpty == true ? question! : '[Hình ảnh]',
+      );
+      _hasSavedToHistory = true;
+    }
+
+    final userMessage = {
+      'text': question ?? '',
+      'isUser': true,
+      'isImage': true,
+      'imagePath': image.path,
+      'created': DateTime.now().toIso8601String(),
+      'timestamp': DateTime.now(),
+    };
+
+    setState(() {
+      _messages.add(userMessage);
+      _isLoading = true;
+      _isTyping = true;
+    });
+
+    _scrollToBottom();
+
+    await _chatbotService.saveMessage(
+      sessionId: _currentSessionId!,
+      text: question?.isNotEmpty == true ? question! : '[Hình ảnh]',
+      isUser: true,
+    );
+
+    try {
+      final response = await _chatbotService.generateResponseWithImage(
+        image: image,
+        sessionId: _currentSessionId!,
+        question: question,
+      );
+
+      final botMessage = {
+        'text': response,
+        'isUser': false,
+        'created': DateTime.now().toIso8601String(),
+        'timestamp': DateTime.now(),
+      };
+
+      setState(() {
+        _messages.add(botMessage);
+        _isTyping = false;
+      });
+
+      await _chatbotService.saveMessage(
+        sessionId: _currentSessionId!,
+        text: response,
+        isUser: false,
+      );
+
+      _scrollToBottom();
+    } catch (e) {
+      print('Lỗi xử lý ảnh: $e');
+      setState(() {
+        _isTyping = false;
+      });
+
+      final errorMessage = {
+        'text': 'Xin lỗi, tôi không thể xử lý hình ảnh này. Vui lòng thử lại sau.',
+        'isUser': false,
+        'created': DateTime.now().toIso8601String(),
+        'timestamp': DateTime.now(),
+      };
+
+      setState(() {
+        _messages.add(errorMessage);
+      });
+
+      await _chatbotService.saveMessage(
+        sessionId: _currentSessionId!,
+        text: errorMessage['text'] as String,
+        isUser: false,
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isLoading || _isTyping) return;
 
-    // Nếu chưa lưu vào lịch sử và đây là tin nhắn đầu tiên
     if (!_hasSavedToHistory && _messages.isEmpty) {
-      // Lưu session vào lịch sử với tiêu đề là câu hỏi đầu tiên
-      // Thành:
       await _chatbotService.saveSessionToHistory(
         sessionId: _currentSessionId!,
         title: text,
       );
-
       _hasSavedToHistory = true;
     }
 
-    // Thêm tin nhắn người dùng
     final userMessage = {
       'text': text,
       'isUser': true,
@@ -96,7 +181,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
     _scrollToBottom();
 
-    // Lưu tin nhắn người dùng
     await _chatbotService.saveMessage(
       sessionId: _currentSessionId!,
       text: text,
@@ -104,13 +188,11 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     );
 
     try {
-      // Tạo phản hồi
       final response = await _chatbotService.generateResponse(
         question: text,
         sessionId: _currentSessionId!,
       );
 
-      // Xử lý MAP tag
       String? mapDestination;
       String finalResponse = response;
 
@@ -121,7 +203,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
         finalResponse = response.replaceAll(mapRegex, '').trim();
       }
 
-      // Thêm tin nhắn bot
       final botMessage = {
         'text': finalResponse,
         'isUser': false,
@@ -135,7 +216,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
         _isTyping = false;
       });
 
-      // Lưu tin nhắn bot
       await _chatbotService.saveMessage(
         sessionId: _currentSessionId!,
         text: finalResponse,
@@ -145,6 +225,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
       _scrollToBottom();
     } catch (e) {
+      print('Lỗi gửi tin nhắn: $e');
       setState(() {
         _isTyping = false;
       });
@@ -186,16 +267,15 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FFFE),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawer: const TrangMenu(),
-
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF7FFFE),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         centerTitle: true,
         leading: widget.sessionId != null
-        // Mở từ lịch sử → hiện nút back
             ? Padding(
           padding: const EdgeInsets.all(6),
           child: GestureDetector(
@@ -209,7 +289,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
             ),
           ),
         )
-        // Chat mới → hiện nút menu như bình thường
             : Builder(
           builder: (context) => Padding(
             padding: const EdgeInsets.all(6),
@@ -242,13 +321,13 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
               },
             ),
             const SizedBox(width: 12),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   "Thanh Hóa",
                   style: TextStyle(
-                    color: Colors.black,
+                    color: isDark ? Colors.white : Colors.black,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -256,7 +335,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                 Text(
                   "Travel Assistant",
                   style: TextStyle(
-                    color: Color(0xFF9B89FF),
+                    color: isDark ? Colors.grey[400] : const Color(0xFF9B89FF),
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
@@ -266,11 +345,9 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
           ],
         ),
       ),
-
       body: Column(
         children: [
           if (_isLoading) const LinearProgressIndicator(),
-
           Expanded(
             child: _messages.isEmpty
                 ? _buildEmptyState()
@@ -282,11 +359,12 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                 if (_isTyping && index == _messages.length) {
                   return _buildTypingIndicator();
                 }
-
                 final msg = _messages[index];
                 return ChatBubble(
                   text: msg['text'],
                   isUser: msg['isUser'],
+                  isImage: msg['isImage'] == true,
+                  imagePath: msg['imagePath'],
                   mapDestination: msg['mapDestination'],
                   timestamp: msg['timestamp'] != null
                       ? (msg['timestamp'] is DateTime
@@ -297,10 +375,14 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
               },
             ),
           ),
-
           InputField(
             controller: _controller,
             onSend: _sendMessage,
+            onImageSelected: (image, {question}) {
+              if (image != null) {
+                _sendImage(image, question: question);
+              }
+            },
             isLoading: _isLoading || _isTyping,
           ),
         ],
@@ -321,10 +403,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: const LinearGradient(
-                colors: [
-                  Color(0xFFFFE4F7),
-                  Color(0xFFFFC0E4),
-                ],
+                colors: [Color(0xFFFFE4F7), Color(0xFFFFC0E4)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -356,7 +435,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
             ),
           ),
           const SizedBox(width: 8),
-
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -396,7 +474,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
           ),
           const SizedBox(height: 8),
           Text(
-            "Hãy nhập câu hỏi để bắt đầu nhé!",
+            "Hãy nhập câu hỏi hoặc gửi ảnh để bắt đầu nhé!",
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],

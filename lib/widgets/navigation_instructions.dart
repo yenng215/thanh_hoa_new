@@ -6,12 +6,14 @@ class NavigationInstructions extends StatefulWidget {
   final List<NavigationStep> steps;
   final VoidCallback onStartNavigation;
   final VoidCallback onClose;
+  final ValueChanged<bool>? onExpandChanged; // ✅ THÊM CALLBACK
 
   const NavigationInstructions({
     super.key,
     required this.steps,
     required this.onStartNavigation,
     required this.onClose,
+    this.onExpandChanged, // ✅ THÊM
   });
 
   @override
@@ -25,7 +27,7 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
   late Animation<double> _heightAnimation;
   final ScrollController _scrollController = ScrollController();
   double _dragStartY = 0;
-  double _currentHeight = 0.35; // 35% màn hình khi thu gọn
+  double _currentHeight = 0.35;
 
   @override
   void initState() {
@@ -35,8 +37,8 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
       duration: const Duration(milliseconds: 300),
     );
     _heightAnimation = Tween<double>(
-      begin: 0.35, // 35% khi thu gọn
-      end: 0.8,    // 80% khi mở rộng (gần full màn hình)
+      begin: 0.35,
+      end: 0.8,
     ).animate(CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeInOut,
@@ -59,6 +61,8 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
         _animationController.reverse();
       }
     });
+    // ✅ GỌI CALLBACK
+    widget.onExpandChanged?.call(_isExpanded);
   }
 
   void _onPanStart(DragStartDetails details) {
@@ -68,7 +72,7 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
   void _onPanUpdate(DragUpdateDetails details) {
     final screenHeight = MediaQuery.of(context).size.height;
     final delta = details.globalPosition.dy - _dragStartY;
-    final deltaPercentage = -delta / screenHeight; // Kéo lên là âm, kéo xuống là dương
+    final deltaPercentage = -delta / screenHeight;
 
     setState(() {
       _currentHeight = (_currentHeight + deltaPercentage).clamp(0.3, 0.9);
@@ -77,24 +81,29 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
   }
 
   void _onPanEnd(DragEndDetails details) {
-    // Snap to nearest threshold
+    bool newExpandedState;
     if (_currentHeight < 0.5) {
       setState(() {
         _currentHeight = 0.35;
         _isExpanded = false;
       });
+      newExpandedState = false;
     } else {
       setState(() {
         _currentHeight = 0.8;
         _isExpanded = true;
       });
+      newExpandedState = true;
     }
+    // ✅ GỌI CALLBACK
+    widget.onExpandChanged?.call(newExpandedState);
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.steps.isEmpty) return const SizedBox();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -107,14 +116,14 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
         width: screenWidth,
         height: screenHeight * _currentHeight,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(20),
             topRight: Radius.circular(20),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.15),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -128,32 +137,36 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
 
             // Header
-            _buildHeader(),
+            _buildHeader(isDark),
 
             // Divider
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Divider(height: 1, thickness: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                color: isDark ? Colors.grey[800] : Colors.grey[200],
+              ),
             ),
 
             // Instructions
             Expanded(
               child: _currentHeight < 0.5
-                  ? _buildSummaryInstructions()
-                  : _buildFullInstructions(),
+                  ? _buildSummaryInstructions(isDark)
+                  : _buildFullInstructions(isDark),
             ),
 
-            // Start navigation button (only when not expanded)
+            // Start navigation button
             if (_currentHeight < 0.5)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + MediaQuery.of(context).padding.bottom),
                 child: ElevatedButton(
                   onPressed: widget.onStartNavigation,
                   style: ElevatedButton.styleFrom(
@@ -188,7 +201,7 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDark) {
     final totalDistance = widget.steps.fold(0.0, (sum, step) => sum + step.distance) / 1000;
     final totalDuration = widget.steps.fold(0.0, (sum, step) => sum + step.duration) / 60;
 
@@ -208,20 +221,21 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
       ),
       title: Text(
         '${_formatDistance(totalDistance)} • ${_formatDuration(totalDuration)}',
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: 16,
+          color: isDark ? Colors.white : Colors.black,
         ),
       ),
       subtitle: Text(
         '${widget.steps.length} bước',
         style: TextStyle(
           fontSize: 13,
-          color: Colors.grey[600],
+          color: isDark ? Colors.grey[500] : Colors.grey[600],
         ),
       ),
       trailing: IconButton(
-        icon: const Icon(Icons.close, color: Colors.grey, size: 22),
+        icon: Icon(Icons.close, color: isDark ? Colors.grey[500] : Colors.grey, size: 22),
         onPressed: widget.onClose,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
@@ -230,37 +244,39 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
     );
   }
 
-  Widget _buildSummaryInstructions() {
+  Widget _buildSummaryInstructions(bool isDark) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: widget.steps.length > 3 ? 3 : widget.steps.length,
       itemBuilder: (context, index) {
         final step = widget.steps[index];
-        return _buildStepTile(step, isSummary: true);
+        return _buildStepTile(step, isDark: isDark, isSummary: true);
       },
     );
   }
 
-  Widget _buildFullInstructions() {
+  Widget _buildFullInstructions(bool isDark) {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: widget.steps.length,
       itemBuilder: (context, index) {
         final step = widget.steps[index];
-        return _buildStepTile(step);
+        return _buildStepTile(step, isDark: isDark);
       },
     );
   }
 
-  Widget _buildStepTile(NavigationStep step, {bool isSummary = false}) {
+  Widget _buildStepTile(NavigationStep step, {required bool isDark, bool isSummary = false}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(
+          color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+        ),
       ),
       child: Row(
         children: [
@@ -290,6 +306,7 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
                   style: TextStyle(
                     fontSize: isSummary ? 14 : 15,
                     fontWeight: isSummary ? FontWeight.normal : FontWeight.w500,
+                    color: isDark ? Colors.white : Colors.black,
                   ),
                   maxLines: isSummary ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
@@ -301,7 +318,7 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
                       step.streetName!,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: isDark ? Colors.grey[500] : Colors.grey[600],
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -316,14 +333,14 @@ class _NavigationInstructionsState extends State<NavigationInstructions>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: isDark ? Colors.grey[800] : Colors.grey[200],
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 _formatDistance(step.distance / 1000),
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[700],
+                  color: isDark ? Colors.grey[400] : Colors.grey[700],
                   fontWeight: FontWeight.w500,
                 ),
               ),

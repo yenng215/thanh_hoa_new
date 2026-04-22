@@ -99,14 +99,14 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FFFE),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF9B89FF)),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Đăng ký tài khoản'),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
       ),
       body: SafeArea(
@@ -140,6 +140,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   children: [
                     TextFormField(
                       controller: _nameController,
+                      style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Họ và tên',
                         prefixIcon: const Icon(Icons.person, color: Color(0xFF9B89FF)),
@@ -162,6 +163,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _emailController,
+                      style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Email',
                         prefixIcon: const Icon(Icons.email, color: Color(0xFF9B89FF)),
@@ -185,6 +187,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _passwordController,
+                      style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
                         prefixIcon: const Icon(Icons.lock, color: Color(0xFF9B89FF)),
@@ -214,6 +217,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _confirmPasswordController,
+                      style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Xác nhận mật khẩu',
                         prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF9B89FF)),

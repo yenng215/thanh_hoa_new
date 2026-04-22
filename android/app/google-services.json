@@ -7,12 +7,28 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:264365578027:android:8324a6349b8669cdf2576e",
+        "mobilesdk_app_id": "1:264365578027:android:6dbf534b2b5fbdeef2576e",
         "android_client_info": {
-          "package_name": "com.example.admin_chatbot_ai_thanh_hoa"
+          "package_name": "com.appthanhhoa.travel"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "264365578027-dmik00t66hslnith2m8gjfpevielqjgd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.appthanhhoa.travel",
+            "certificate_hash": "cbf58216260ff2f65706cca4d88b702461473d4b"
+          }
+        },
+        {
+          "client_id": "264365578027-rgke2odeh6ofvhejl7oktdf8gpos2jqp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.appthanhhoa.travel",
+            "certificate_hash": "a52b22360a6de17790df5906d3f7f8c76031024e"
+          }
+        },
         {
           "client_id": "264365578027-ipbk2acbv9fit3rqa7t115crur2to3rf.apps.googleusercontent.com",
           "client_type": 3
@@ -36,9 +52,9 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:264365578027:android:897608c255b8c576f2576e",
+        "mobilesdk_app_id": "1:264365578027:android:8324a6349b8669cdf2576e",
         "android_client_info": {
-          "package_name": "com.example.thanh_hoa_new"
+          "package_name": "com.example.admin_chatbot_ai_thanh_hoa"
         }
       },
       "oauth_client": [

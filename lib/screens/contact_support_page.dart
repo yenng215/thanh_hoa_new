@@ -18,8 +18,9 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FFFE),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'Liên hệ hỗ trợ',
@@ -28,7 +29,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: const Color(0xFF9B89FF),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -193,6 +194,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                       onPressed: _isSending ? null : _sendFeedback,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF9B89FF),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -234,9 +236,10 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
           const SizedBox(height: 15),
 
           Container(
+
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
               borderRadius: BorderRadius.circular(15),
               boxShadow: [
                 BoxShadow(
@@ -283,13 +286,15 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
+              color: isDark ? const Color(0xFF1E1E1E) : Colors.blue.shade50,
               borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.blue.shade200),
+              border: Border.all(
+                color: isDark ? Colors.grey[700]! : Colors.blue.shade200,
+              ),
             ),
             child: Row(
               children: [
-                Icon(Icons.access_time, color: Colors.blue.shade700),
+                Icon(Icons.access_time, color: isDark ? Colors.grey[400] : Colors.blue.shade700),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -299,7 +304,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                         'Thời gian hỗ trợ',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
+                          color: isDark ? Colors.grey[300] : Colors.blue.shade700,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -307,7 +312,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                         'Thứ 2 - Thứ 6: 8:00 - 22:00\nThứ 7 - Chủ nhật: 9:00 - 18:00',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.blue.shade700,
+                          color: isDark ? Colors.grey[400] : Colors.blue.shade700,
                         ),
                       ),
                     ],
@@ -407,6 +412,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     required String label,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(30),
@@ -427,7 +433,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
             label,
             style: TextStyle(
               fontSize: 11,
-              color: Colors.grey[600],
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
             ),
           ),
         ],
@@ -476,7 +482,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
         url = 'https://facebook.com/thanhhoatravel';
     }
 
-    _showSnackBar('Đang mở $platform...');
+    _showSnackBar('Tính năng đang phát triển $platform...');
     // TODO: Thực tế sẽ launchUrl
   }
 

@@ -10,8 +10,109 @@ class SettingsService extends ChangeNotifier {
   bool _isDarkMode = false;
   String _fontSize = 'Vừa';
 
+  SettingsService() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_auth.currentUser != null) {
+        loadSettings();
+      }
+    });
+  }
   bool get isDarkMode => _isDarkMode;
   String get fontSize => _fontSize;
+// ✅ Lấy tỷ lệ kích thước chữ
+  double get textScaleFactor {
+    switch (_fontSize) {
+      case 'Nhỏ':
+        return 0.85;
+      case 'Lớn':
+        return 1.2;
+      default: // 'Vừa'
+        return 1.0;
+    }
+  }
+  // ✅ Lấy theme data dựa trên cài đặt
+  ThemeData get themeData {
+    if (_isDarkMode) {
+      return ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        primaryColor: const Color(0xFF9B89FF),
+        cardColor: const Color(0xFF1E1E1E),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1E1E1E),
+          elevation: 0,
+          titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          iconTheme: IconThemeData(color: Colors.white),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9B89FF)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF2C2C2C),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey[700]!),
+          ),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderSide: BorderSide(color: Color(0xFF9B89FF)),
+          ),
+        ),
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white),
+          titleLarge: TextStyle(color: Colors.white),
+          titleMedium: TextStyle(color: Colors.white),
+        ),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF9B89FF),
+          surface: Color(0xFF1E1E1E),
+          background: Color(0xFF121212),
+        ),
+      );
+    } else {
+      return ThemeData(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFF7FFFE),
+        primaryColor: const Color(0xFF9B89FF),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF9B89FF),
+          elevation: 0,
+          titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          iconTheme: IconThemeData(color: Colors.white),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9B89FF)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey[300]!),
+          ),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderSide: BorderSide(color: Color(0xFF9B89FF)),
+          ),
+        ),
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Colors.black87),
+          bodyMedium: TextStyle(color: Colors.black87),
+          titleLarge: TextStyle(color: Colors.black),
+          titleMedium: TextStyle(color: Colors.black),
+        ),
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFF9B89FF),
+          surface: Colors.white,
+          background: Color(0xFFF7FFFE),
+        ),
+      );
+    }
+  }
 
   // Lấy tài liệu settings của user hiện tại
   DocumentReference _getSettingsRef() {
@@ -25,6 +126,14 @@ class SettingsService extends ChangeNotifier {
   // Tải cài đặt từ Firestore
   Future<void> loadSettings() async {
     try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) {
+        _isDarkMode = false;
+        _fontSize = 'Vừa';
+        notifyListeners();
+        return;
+      }
+
       final doc = await _getSettingsRef().get();
 
       if (doc.exists) {
@@ -32,7 +141,6 @@ class SettingsService extends ChangeNotifier {
         _isDarkMode = data['darkMode'] ?? false;
         _fontSize = data['fontSize'] ?? 'Vừa';
       } else {
-        // Cài đặt mặc định
         _isDarkMode = false;
         _fontSize = 'Vừa';
       }
@@ -51,11 +159,14 @@ class SettingsService extends ChangeNotifier {
     required String fontSize,
   }) async {
     try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('User not logged in');
+
       await _getSettingsRef().set({
         'darkMode': darkMode,
         'fontSize': fontSize,
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
 
       _isDarkMode = darkMode;
       _fontSize = fontSize;
@@ -63,28 +174,6 @@ class SettingsService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Lỗi lưu cài đặt: $e');
       throw Exception('Không thể lưu cài đặt');
-    }
-  }
-
-  // Cập nhật chế độ tối
-  Future<void> setDarkMode(bool value) async {
-    await saveSettings(darkMode: value, fontSize: _fontSize);
-  }
-
-  // Cập nhật cỡ chữ
-  Future<void> setFontSize(String value) async {
-    await saveSettings(darkMode: _isDarkMode, fontSize: value);
-  }
-
-  // Lấy kích thước chữ cho ứng dụng
-  double getTextScaleFactor() {
-    switch (_fontSize) {
-      case 'Nhỏ':
-        return 0.85;
-      case 'Lớn':
-        return 1.15;
-      default:
-        return 1.0;
     }
   }
 }

@@ -1,6 +1,9 @@
 // lib/services/chatbot_service.dart
+
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:string_similarity/string_similarity.dart';
 import '../services/gemini_service.dart';
 import '../services/context_service.dart';
 import '../services/firestore_service.dart';
@@ -11,8 +14,8 @@ class ChatbotService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GeminiService _geminiService = GeminiService();
   final ContextService _contextService = ContextService();
+  final double _similarityThreshold = 0.5;
 
-  // ✅ SỬA: Tạo session mới nhưng KHÔNG lưu vào lịch sử
   Future<String> createNewSession() async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not logged in');
@@ -23,13 +26,9 @@ class ChatbotService {
         .collection('sessions')
         .doc();
 
-    // ❌ XÓA: Không tự động lưu session nữa
-    // ✅ Chỉ tạo ID mới, chưa lưu bất cứ document nào
-
     return sessionRef.id;
   }
 
-  // ✅ THÊM MỚI: Lưu session chỉ khi có tin nhắn đầu tiên
   Future<void> saveSessionToHistory({
     required String sessionId,
     required String title,
@@ -51,7 +50,6 @@ class ChatbotService {
     });
   }
 
-  // Lưu tin nhắn vào session
   Future<void> saveMessage({
     required String sessionId,
     required String text,
@@ -77,7 +75,6 @@ class ChatbotService {
       'mapDestination': mapDestination,
     });
 
-    // Cập nhật lastMessage cho session (chỉ khi session đã tồn tại)
     final sessionDoc = await _firestore
         .collection('users')
         .doc(user.uid)
@@ -98,7 +95,6 @@ class ChatbotService {
     }
   }
 
-  // Lấy lịch sử chat của session
   Future<List<Map<String, dynamic>>> getChatHistory(String sessionId) async {
     final user = _auth.currentUser;
     if (user == null) return [];
@@ -123,31 +119,46 @@ class ChatbotService {
     }).toList();
   }
 
-  // Tạo phản hồi từ Gemini
+  // 📸 Xử lý gửi ảnh - sử dụng Gemini Vision
+  // 📸 Xử lý gửi ảnh - Gọi Gemini Vision để phân tích
+  Future<String> generateResponseWithImage({
+    required File image,
+    required String sessionId,
+    String? question,
+  }) async {
+    try {
+      final chatHistory = await getChatHistory(sessionId);
+
+      final response = await _geminiService.analyzeImage(
+        image: image,
+        chatHistory: chatHistory,
+        question: question,
+      );
+
+      return response;
+    } catch (e) {
+      print('❌ Lỗi xử lý ảnh trong ChatbotService: $e');
+      return 'Xin lỗi, tôi không thể xử lý hình ảnh này. Vui lòng thử lại với hình ảnh rõ hơn hoặc nhập câu hỏi bằng văn bản.';
+    }
+  }
+
   Future<String> generateResponse({
     required String question,
     required String sessionId,
   }) async {
     try {
-      // Lấy lịch sử chat
       final chatHistory = await getChatHistory(sessionId);
-
-      // Lấy dữ liệu QA từ Firestore
       final qaData = await FirestoreService.loadQAData();
-
-      // Phân tích ngữ cảnh
       final context = _contextService.analyzeContext(question, chatHistory);
-
-      // Kiểm tra có dữ liệu local không
       final hasLocalData = qaData.isNotEmpty;
 
-      // Tìm câu trả lời phù hợp từ dữ liệu QA
       List<QAPair> relevantData = [];
       if (hasLocalData) {
         relevantData = _findRelevantQA(question, qaData);
       }
 
-      // Tạo phản hồi
+      print('📊 Tìm thấy ${relevantData.length} cặp QA phù hợp');
+
       final response = await _geminiService.generateSmartResponse(
         question: question,
         availableData: relevantData,
@@ -156,7 +167,6 @@ class ChatbotService {
         hasLocalData: hasLocalData,
       );
 
-      // Cập nhật ngữ cảnh
       _contextService.updateContext(question, response);
 
       return response;
@@ -165,34 +175,20 @@ class ChatbotService {
     }
   }
 
-  // Tìm câu hỏi liên quan trong dữ liệu QA
   List<QAPair> _findRelevantQA(String question, List<QAPair> qaData) {
-    final lowerQuestion = question.toLowerCase();
-    final List<QAPair> results = [];
-
-    // Tách từ khóa
-    final keywords = lowerQuestion
-        .replaceAll(RegExp(r'[^\w\s]'), ' ')
-        .split(' ')
-        .where((w) => w.length > 2)
-        .toSet();
+    final lowerQuestion = question.toLowerCase().trim();
+    final List<MapEntry<QAPair, double>> scored = [];
 
     for (var qa in qaData) {
-      final lowerQ = qa.question.toLowerCase();
-      int matchCount = 0;
+      final score = StringSimilarity.compareTwoStrings(
+          lowerQuestion, qa.question.toLowerCase());
 
-      for (var keyword in keywords) {
-        if (lowerQ.contains(keyword)) {
-          matchCount++;
-        }
-      }
-
-      if (matchCount > 0) {
-        results.add(qa);
-        if (results.length >= 3) break;
+      if (score >= _similarityThreshold) {
+        scored.add(MapEntry(qa, score));
       }
     }
 
-    return results;
+    scored.sort((a, b) => b.value.compareTo(a.value));
+    return scored.take(3).map((e) => e.key).toList();
   }
 }

@@ -21,20 +21,34 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProvider(create: (_) => SettingsService()),
+        ChangeNotifierProvider(create: (_) => SettingsService()..loadSettings()),
       ],
-      child: MaterialApp(
-        title: 'Thanh Hóa Travel',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          fontFamily: 'Roboto',
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF9B89FF),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
-        home: const AuthWrapper(),
+      child: Consumer2<AuthService, SettingsService>(  // ✅ Dùng Consumer2 để lắng nghe cả 2 service
+        builder: (context, authService, settingsService, child) {
+          final settingsService = Provider.of<SettingsService>(context, listen: false);
+
+          // Khi có user đăng nhập, load settings từ Firestore
+          if (authService.currentUser != null) {
+            // Load settings nếu chưa load hoặc user mới
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              settingsService.loadSettings();
+            });
+          }
+          return MaterialApp(
+            title: 'Thanh Hóa Travel',
+            debugShowCheckedModeBanner: false,
+            theme: settingsService.themeData, // ✅ Lấy theme từ SettingsService
+            builder: (context, child) {
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(settingsService.textScaleFactor),
+                ),
+                child: child!,
+              );
+            },
+            home: const AuthWrapper(),
+          );
+        },
       ),
     );
   }

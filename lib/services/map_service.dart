@@ -69,7 +69,7 @@ class MapService {
         Uri.parse(
             'https://nominatim.openstreetmap.org/search?format=json&q=$query&limit=5&countrycodes=vn'),
         headers: {'User-Agent': 'ThanhHoaTravelAssistant/1.0'},
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);

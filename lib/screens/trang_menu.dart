@@ -1,5 +1,4 @@
 // trang_menu.dart
-// ✅ ĐÃ FIX: Xóa hoàn toàn showDialog loading trong _handleLogout
 import 'package:flutter/material.dart';
 import '../screens/chat_page.dart';
 import '../screens/history_page.dart';
@@ -11,16 +10,14 @@ import '../auth/login_page.dart';
 import '../screens/weather_page.dart';
 import '../screens/settings_page.dart';
 import '../screens/contact_support_page.dart';
-
+import '../screens/simple_map_page.dart';
 class TrangMenu extends StatelessWidget {
   const TrangMenu({super.key});
 
   Future<void> _handleLogout(BuildContext context, AuthService authService) async {
-    // Bước 1: Đóng drawer ngay
     Navigator.pop(context);
     try {
       await authService.logout();
-      // AuthWrapper tự rebuild về LoginPage — không cần làm gì thêm
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -34,20 +31,24 @@ class TrangMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
     final currentUser = authService.currentUser;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.75,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
+          color: isDark ? const Color(0xFF1E1E1E) : null,
+          gradient: isDark
+              ? null
+              : const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFFF7FFFE),
-              const Color(0xFFF0E6FF),
+              Color(0xFFF7FFFE),
+              Color(0xFFF0E6FF),
               Colors.white,
             ],
-            stops: const [0.0, 0.3, 1.0],
+            stops: [0.0, 0.3, 1.0],
           ),
         ),
         child: ListView(
@@ -55,24 +56,17 @@ class TrangMenu extends StatelessWidget {
           children: [
             Container(
               height: 120,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [Color(0xFF9B89FF), Color(0xFF7B68EE), Color(0xFFB8A9FF)],
                   stops: [0.0, 0.6, 1.0],
                 ),
-                borderRadius: const BorderRadius.only(
+                borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(30),
                   bottomRight: Radius.circular(30),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF9B89FF).withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
               ),
               child: Stack(
                 children: [
@@ -110,17 +104,10 @@ class TrangMenu extends StatelessWidget {
                             backgroundColor: Colors.white,
                             child: Text(
                               currentUser?.email?.substring(0, 1).toUpperCase() ?? 'U',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF9B89FF),
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.grey.withOpacity(0.3),
-                                    blurRadius: 5,
-                                    offset: const Offset(1, 1),
-                                  ),
-                                ],
+                                color: Color(0xFF9B89FF),
                               ),
                             ),
                           ),
@@ -137,7 +124,6 @@ class TrangMenu extends StatelessWidget {
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  shadows: [Shadow(color: Colors.black26, blurRadius: 4, offset: Offset(1, 1))],
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -145,7 +131,10 @@ class TrangMenu extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(
                                 currentUser?.email ?? currentUser?.phoneNumber ?? 'Chưa có thông tin',
-                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontSize: 12,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -160,40 +149,56 @@ class TrangMenu extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _buildMenuItem(
+              context: context,
               icon: Icons.chat_bubble_outline,
               title: "Cuộc trò chuyện mới",
               iconColor: const Color(0xFF9B89FF),
               onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ChatPage())),
             ),
             _buildMenuItem(
+              context: context,
               icon: Icons.wb_sunny,
               title: "Thời tiết",
               iconColor: const Color(0xFFFFA500),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WeatherPage())),
             ),
             _buildMenuItem(
+              context: context,
+              icon: Icons.map_outlined,
+              title: "Bản đồ",
+              iconColor: const Color(0xFF4CAF50),
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SimpleMapPage())
+              ),
+            ),
+            _buildMenuItem(
+              context: context,
               icon: Icons.history_rounded,
               title: "Lịch sử gần đây",
               iconColor: const Color(0xFF4CAF50),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
             ),
             _buildMenuItem(
+              context: context,
               icon: Icons.settings_rounded,
               title: "Cài đặt",
               iconColor: Colors.grey,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
             ),
             _buildMenuItem(
+              context: context,
               icon: Icons.help_outline_rounded,
               title: "Liên hệ hỗ trợ",
               iconColor: Colors.teal,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactSupportPage())),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              child: Divider(thickness: 1, color: Color(0xFFE0E0E0)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              child: Divider(thickness: 1, color: isDark ? Colors.grey[800] : const Color(0xFFE0E0E0)),
             ),
             _buildMenuItem(
+              context: context,
               icon: Icons.logout_rounded,
               title: "Đăng xuất",
               iconColor: Colors.red,
@@ -203,7 +208,10 @@ class TrangMenu extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Center(
-              child: Text('Version 1.0.0', style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+              child: Text(
+                'Version 1.0.0',
+                style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+              ),
             ),
           ],
         ),
@@ -212,6 +220,7 @@ class TrangMenu extends StatelessWidget {
   }
 
   Widget _buildMenuItem({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required Color iconColor,
@@ -219,6 +228,8 @@ class TrangMenu extends StatelessWidget {
     bool showArrow = true,
     VoidCallback? onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Material(
@@ -244,11 +255,19 @@ class TrangMenu extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: textColor ?? Colors.black87),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: textColor ?? (isDark ? Colors.white : Colors.black87),
+                    ),
                   ),
                 ),
                 if (showArrow)
-                  Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey[400], size: 16),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    size: 16,
+                  ),
               ],
             ),
           ),
@@ -258,21 +277,27 @@ class TrangMenu extends StatelessWidget {
   }
 
   Future<void> _showLogoutDialog(BuildContext context, AuthService authService) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
         title: const Text('Đăng xuất', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-        content: const Text('Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng?', style: TextStyle(fontSize: 15)),
+        content: Text(
+          'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng?',
+          style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            style: TextButton.styleFrom(foregroundColor: Colors.grey[600]),
+            style: TextButton.styleFrom(foregroundColor: isDark ? Colors.grey[400] : Colors.grey[600]),
             child: const Text('Hủy'),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(dialogContext); // đóng dialog bằng dialogContext
+              Navigator.pop(dialogContext);
               _handleLogout(context, authService);
             },
             style: ElevatedButton.styleFrom(

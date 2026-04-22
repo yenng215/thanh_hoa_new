@@ -36,13 +36,10 @@ class _HistoryPageState extends State<HistoryPage> {
       final messageDate = DateTime(time.year, time.month, time.day);
 
       if (messageDate == today) {
-        // Hôm nay: hiển thị giờ:phút
         return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
       } else if (messageDate == today.subtract(const Duration(days: 1))) {
-        // Hôm qua
         return 'Hôm qua ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
       } else {
-        // Cũ hơn: hiển thị ngày/tháng
         return '${time.day}/${time.month} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
       }
     } catch (e) {
@@ -57,32 +54,38 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: isDark
+            ? BoxDecoration(color: const Color(0xFF121212))
+            : const BoxDecoration(
           gradient: RadialGradient(
             center: Alignment(-0.7, -0.6),
             radius: 1.5,
             colors: [
-              Color(0xFFE8C6FF),     // Hồng nhạt (trung tâm)
-              Color(0xFFC6B8FF),     // Tím nhạt
-              Color(0xFFF0DAFF),     // Hồng rất nhạt
-              Color(0xFFDAD0FF),     // Tím rất nhạt
-              Color(0xFFC6DEFF),     // Xanh dương nhạt
-              Color(0xFFDAEAFF),     // Xanh dương rất nhạt
-              Colors.white,          // Trắng (viền ngoài)
+              Color(0xFFE8C6FF),
+              Color(0xFFC6B8FF),
+              Color(0xFFF0DAFF),
+              Color(0xFFDAD0FF),
+              Color(0xFFC6DEFF),
+              Color(0xFFDAEAFF),
+              Colors.white,
             ],
             stops: [0.0, 0.15, 0.3, 0.45, 0.6, 0.8, 1.0],
           ),
         ),
         child: Column(
           children: [
-            // AppBar với màu trong suốt để thấy gradient
             Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: isDark
+                    ? null
+                    : LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
@@ -93,6 +96,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   ],
                   stops: const [0.0, 0.3, 0.7, 1.0],
                 ),
+                color: isDark ? const Color(0xFF1E1E1E) : null,
                 borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(30),
                 ),
@@ -129,13 +133,15 @@ class _HistoryPageState extends State<HistoryPage> {
                 iconTheme: const IconThemeData(color: Colors.white),
               ),
             ),
-            // Nội dung
             Expanded(
               child: sessions.isEmpty
-                  ? const Center(
+                  ? Center(
                 child: Text(
                   "Chưa có cuộc trò chuyện nào",
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDark ? Colors.grey[500] : Colors.grey[600],
+                  ),
                 ),
               )
                   : ListView.builder(
@@ -160,11 +166,15 @@ class _HistoryPageState extends State<HistoryPage> {
                       child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.85),
+                          color: isDark
+                              ? const Color(0xFF1E1E1E).withOpacity(0.9)
+                              : Colors.white.withOpacity(0.85),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFC6B8FF).withOpacity(0.15),
+                              color: isDark
+                                  ? Colors.black26
+                                  : const Color(0xFFC6B8FF).withOpacity(0.15),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
@@ -174,8 +184,8 @@ class _HistoryPageState extends State<HistoryPage> {
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
                                   colors: [
                                     Color(0xFFC6B8FF),
                                     Color(0xFFA594FF),
@@ -185,7 +195,11 @@ class _HistoryPageState extends State<HistoryPage> {
                                 ),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 24),
+                              child: const Icon(
+                                Icons.chat_bubble_outline,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                             ),
                             const SizedBox(width: 12),
 
@@ -197,9 +211,10 @@ class _HistoryPageState extends State<HistoryPage> {
                                     title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white : Colors.black87,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -208,14 +223,14 @@ class _HistoryPageState extends State<HistoryPage> {
                                       Icon(
                                         Icons.access_time,
                                         size: 14,
-                                        color: Colors.grey[500],
+                                        color: isDark ? Colors.grey[500] : Colors.grey[500],
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
                                         _formatTime(s['created']),
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Colors.grey[600],
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                                         ),
                                       ),
                                     ],
@@ -225,24 +240,39 @@ class _HistoryPageState extends State<HistoryPage> {
                             ),
 
                             PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert, color: Color(0xFFA594FF)),
+                              icon: Icon(
+                                Icons.more_vert,
+                                color: isDark ? Colors.grey[400] : const Color(0xFFA594FF),
+                              ),
                               onSelected: (v) async {
                                 if (v == "delete") {
                                   deleteSession(s['id']);
                                 }
-
                                 if (v == "rename") {
                                   final controller = TextEditingController(text: title);
-
                                   showDialog(
                                     context: context,
                                     builder: (_) => AlertDialog(
-                                      title: const Text("Đổi tên"),
-                                      content: TextField(controller: controller),
+                                      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                                      title: Text(
+                                        "Đổi tên",
+                                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                                      ),
+                                      content: TextField(
+                                        controller: controller,
+                                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                                        decoration: InputDecoration(
+                                          hintText: "Nhập tên mới",
+                                          hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                        ),
+                                      ),
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(context),
-                                          child: const Text("Hủy"),
+                                          child: Text(
+                                            "Hủy",
+                                            style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                          ),
                                         ),
                                         ElevatedButton(
                                           onPressed: () async {
@@ -263,8 +293,8 @@ class _HistoryPageState extends State<HistoryPage> {
                                   );
                                 }
                               },
-                              itemBuilder: (c) => const [
-                                PopupMenuItem(
+                              itemBuilder: (c) => [
+                                const PopupMenuItem(
                                   value: "share",
                                   child: Row(
                                     children: [
@@ -274,7 +304,7 @@ class _HistoryPageState extends State<HistoryPage> {
                                     ],
                                   ),
                                 ),
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: "rename",
                                   child: Row(
                                     children: [
@@ -284,7 +314,7 @@ class _HistoryPageState extends State<HistoryPage> {
                                     ],
                                   ),
                                 ),
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: "delete",
                                   child: Row(
                                     children: [

@@ -41,6 +41,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   List<NavigationStep> _navigationSteps = [];
   bool _showInstructions = false;
   bool _isNavigating = false;
+  bool _isNavPanelExpanded = false;
 
   String _transportMode = 'drive';
   bool _isLoading = true;
@@ -64,21 +65,21 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   double _remainingDistance = 0;
 
   final List<String> _transportModes = [
+    'car',
     'drive',
     'walk',
-    'bike',
   ];
 
   final Map<String, IconData> _transportIcons = {
-    'drive': Icons.directions_car,
+    'car': Icons.directions_car,
+    'drive': Icons.motorcycle,
     'walk': Icons.directions_walk,
-    'bike': Icons.directions_bike,
   };
 
   final Map<String, String> _transportNames = {
+    'car': 'Ô tô',
     'drive': 'Xe máy',
     'walk': 'Đi bộ',
-    'bike': 'Xe đạp',
   };
 
   @override
@@ -127,13 +128,20 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
   // 🌟 SỬA: Chỉ theo dõi vị trí thực tế, không tự di chuyển
   void _startLocationTracking() {
+    // ✅ Nếu đang dùng điểm bắt đầu tùy chỉnh (không phải vị trí thực tế)
+    // thì KHÔNG theo dõi vị trí GPS
+    if (_startAddress != 'Vị trí hiện tại của bạn' && _startAddress != null) {
+      print('📍 Đang dùng điểm bắt đầu tùy chỉnh, không theo dõi GPS');
+      return;
+    }
+
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // Cập nhật mỗi 5 mét
+        distanceFilter: 5,
       ),
     ).listen((Position position) {
-      if (!mounted || !_isNavigating) return; // Chỉ cập nhật khi đang trong chế độ navigation
+      if (!mounted || !_isNavigating) return;
 
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);
@@ -209,16 +217,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   double _calculateRemainingDistance() {
     if (_polylinePoints.isEmpty || _currentLocation == null) return 0;
 
-    double minDistance = double.infinity;
+    double totalRemaining = 0;
     int nearestIndex = 0;
+    double minDistance = double.infinity;
 
+    // Tìm điểm gần nhất trên polyline
     for (int i = 0; i < _polylinePoints.length; i++) {
-      final point = _polylinePoints[i];
       final distance = _calculateDistance(
         _currentLocation!.latitude,
         _currentLocation!.longitude,
-        point.latitude,
-        point.longitude,
+        _polylinePoints[i].latitude,
+        _polylinePoints[i].longitude,
       );
 
       if (distance < minDistance) {
@@ -227,33 +236,51 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       }
     }
 
-    double remaining = 0;
+    // Tính tổng khoảng cách từ điểm gần nhất đến cuối
     for (int i = nearestIndex; i < _polylinePoints.length - 1; i++) {
-      final p1 = _polylinePoints[i];
-      final p2 = _polylinePoints[i + 1];
-      remaining += _calculateDistance(
-        p1.latitude, p1.longitude,
-        p2.latitude, p2.longitude,
+      totalRemaining += _calculateDistance(
+        _polylinePoints[i].latitude,
+        _polylinePoints[i].longitude,
+        _polylinePoints[i + 1].latitude,
+        _polylinePoints[i + 1].longitude,
       );
     }
 
-    return remaining;
+    return totalRemaining;
   }
 
-  // 🌟 SỬA: Bắt đầu navigation - KHÔNG tự di chuyển
   void _startNavigation() {
     setState(() {
       _isNavigating = true;
       _showInstructions = false;
-      _zoom = 18;
+      _zoom = 17.0;
+      _currentStepIndex = 0;
+
+      if (_startLocation != null) {
+        _currentLocation = _startLocation;
+      }
+
+      _remainingDistance = _calculateRemainingDistance();
     });
 
-    // Bắt đầu theo dõi vị trí thực tế
     _startLocationTracking();
 
-    // Di chuyển map đến vị trí hiện tại
-    if (_currentLocation != null && _isMapReady) {
-      _mapController.move(_currentLocation!, _zoom);
+    // Nhảy qua bước "depart" nếu cần
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted && _currentStepIndex == 0 && _navigationSteps.isNotEmpty) {
+        final firstStep = _navigationSteps[0];
+        if (firstStep.maneuver == 'depart' && _navigationSteps.length > 1) {
+          setState(() => _currentStepIndex = 1);
+        }
+      }
+    });
+
+    if (mounted && _isMapReady && _currentLocation != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isMapReady) {
+          _mapController.move(_currentLocation!, _zoom);
+        }
+      });
     }
   }
 
@@ -261,6 +288,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     setState(() {
       _showInstructions = false;
       _isNavigating = false;
+      _isNavPanelExpanded = false;
     });
 
     _positionStream?.cancel();
@@ -314,6 +342,11 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     try {
       await _determineStartLocation();
       await _determineDestination();
+
+      print('📍 Sau khi xác định:');
+      print('   Start: $_startLocation ($_startAddress)');
+      print('   Current: $_currentLocation');
+      print('   Destination: $_destination');
 
       if (_startLocation != null && _destination != null) {
         await _calculateRoute();
@@ -394,14 +427,30 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     });
 
     try {
-      print('🔄 Đang tính route với phương tiện: $_transportMode');
+      // Chuyển đổi transportMode sang profile OSRM
+      String osrmProfile;
+      switch (_transportMode) {
+        case 'car':
+          osrmProfile = 'car';
+          break;
+        case 'drive':
+          osrmProfile = 'car'; // Xe máy cũng dùng profile car
+          break;
+        case 'walk':
+          osrmProfile = 'foot';
+          break;
+        default:
+          osrmProfile = 'car';
+      }
+      print('🔄 Đang tính route với phương tiện: $_transportMode (OSRM: $osrmProfile)');
 
+      // ✅ SỬA: Dùng osrmProfile thay vì _transportMode
       final polyline = await MapService.getRoutePolyline(
         _startLocation!.latitude,
         _startLocation!.longitude,
         _destination!.latitude,
         _destination!.longitude,
-        transportMode: _transportMode,
+        transportMode: osrmProfile, // ← Đã sửa
       );
 
       final routeInfo = await MapService.getRouteInfo(
@@ -409,7 +458,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         _startLocation!.longitude,
         _destination!.latitude,
         _destination!.longitude,
-        transportMode: _transportMode,
+        transportMode: osrmProfile, // ← Đã sửa
       );
 
       final steps = await MapService.getRouteSteps(
@@ -417,7 +466,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         _startLocation!.longitude,
         _destination!.latitude,
         _destination!.longitude,
-        transportMode: _transportMode,
+        transportMode: osrmProfile, // ← Đã sửa
       );
 
       double distance = routeInfo['distance'] ?? 0;
@@ -434,12 +483,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         _isCalculating = false;
       });
 
-      if (_polylinePoints.isNotEmpty && _isMapReady) {
-        final bounds = LatLngBounds.fromPoints(_polylinePoints);
-        _mapController.fitBounds(
-          bounds,
-          options: const FitBoundsOptions(padding: EdgeInsets.all(50)),
-        );
+// ✅ Sửa lỗi dispose
+      if (mounted && _isMapReady && _polylinePoints.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _isMapReady) {
+            final bounds = LatLngBounds.fromPoints(_polylinePoints);
+            _mapController.fitBounds(
+              bounds,
+              options: const FitBoundsOptions(padding: EdgeInsets.all(70)),
+            );
+          }
+        });
       }
 
       print('✅ Đã cập nhật route: ${_formatDistance(_distance)} • ${_formatDuration(_duration)}');
@@ -527,15 +581,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
               onPressed: _changeStartLocation,
               tooltip: 'Thay đổi điểm bắt đầu',
             ),
+
             IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: _searchLocation,
+              icon: const Icon(Icons.flag),
+              onPressed: _changeDestination,
+              tooltip: 'Thay đổi điểm kết thúc',
             ),
           ],
-          IconButton(
-            icon: const Icon(Icons.open_in_new),
-            onPressed: _openInExternalMap,
-          ),
+          //IconButton(
+          //icon: const Icon(Icons.open_in_new),
+          //onPressed: _openInExternalMap,
+          //),
         ],
       ),
       body: _isLoading
@@ -553,9 +609,12 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
               maxZoom: 18,
               onMapReady: () {
                 setState(() => _isMapReady = true);
-                if (_currentLocation != null) {
-                  _mapController.move(_currentLocation!, _zoom);
-                }
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && _isMapReady && _startLocation != null) {
+                    _mapController.move(_startLocation!, _zoom);
+                  }
+                });
               },
             ),
             children: [
@@ -572,8 +631,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                     Polyline(
                       points: _polylinePoints,
                       color: _transportMode == 'walk' ? Colors.green :
-                      _transportMode == 'bike' ? Colors.orange :
-                      Colors.blue,
+                      _transportMode == 'car' ? Colors.blue :
+                      const Color(0xFF9B89FF),
                       strokeWidth: 4,
                     ),
                   ],
@@ -685,12 +744,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 steps: _navigationSteps,
                 onStartNavigation: _startNavigation,
                 onClose: _closeInstructions,
+                onExpandChanged: (isExpanded) { // ✅ THÊM CALLBACK
+                  setState(() {
+                    _isNavPanelExpanded = isExpanded;
+                  });
+                },
               ),
             ),
 
-          if (!_isNavigating && !_showInstructions)
+          if (!_isNavigating && !_showInstructions && !_isNavPanelExpanded)
             Positioned(
-              bottom: 70,
+              bottom: 70 + MediaQuery.of(context).padding.bottom,
               left: 20,
               right: 20,
               child: _buildTransportSelector(),
@@ -745,78 +809,87 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   Widget _buildNavigationInfo() {
-    final nextStep = _currentStepIndex < _navigationSteps.length
-        ? _navigationSteps[_currentStepIndex]
-        : null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Lấy bước hiện tại
+    NavigationStep? currentStep;
+    if (_navigationSteps.isNotEmpty) {
+      if (_currentStepIndex < _navigationSteps.length) {
+        currentStep = _navigationSteps[_currentStepIndex];
+      } else if (_currentStepIndex > 0) {
+        currentStep = _navigationSteps[_navigationSteps.length - 1];
+      }
+    }
+
+    // Nếu đang ở bước "depart" (Xuất phát) thì lấy bước tiếp theo
+    if (currentStep?.maneuver == 'depart' && _currentStepIndex + 1 < _navigationSteps.length) {
+      currentStep = _navigationSteps[_currentStepIndex + 1];
+    }
+
+    String instruction = currentStep?.instruction ?? 'Tiếp tục theo tuyến đường';
+    if (instruction.isEmpty || instruction.toLowerCase().contains('depart')) {
+      instruction = 'Tiếp tục theo đường chính';
+    }
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: isDark ? const Color(0xFF1E1E1E).withOpacity(0.95) : Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 2)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF9B89FF).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF9B89FF).withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.navigation, color: Color(0xFF9B89FF), size: 26),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _remainingDistance > 0
+                      ? 'Còn ${_formatDistance(_remainingDistance)}'
+                      : 'Đang tính...',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                child: const Icon(Icons.navigation, color: Color(0xFF9B89FF), size: 20),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Còn ${_formatDistance(_remainingDistance)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (nextStep != null)
-                      Text(
-                        'Tiếp theo: ${nextStep.instruction}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  'Tiếp theo: $instruction',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    height: 1.3,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-
   Widget _buildInfoPanel() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: isDark ? const Color(0xFF1E1E1E).withOpacity(0.95) : Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -840,7 +913,10 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
               Expanded(
                 child: Text(
                   _startAddress ?? 'Điểm bắt đầu',
-                  style: const TextStyle(fontSize: 14),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -862,7 +938,10 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
               Expanded(
                 child: Text(
                   _endAddress ?? 'Điểm đến',
-                  style: const TextStyle(fontSize: 14),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -877,14 +956,14 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                   Icon(
                     Icons.timer_outlined,
                     size: 16,
-                    color: Colors.grey[600],
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
                   ),
                   const SizedBox(width: 4),
                   Text(
                     '${_formatDistance(_distance)} • ${_formatDuration(_duration)}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[700],
+                      color: isDark ? Colors.grey[300] : Colors.grey[700],
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -897,14 +976,16 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   Widget _buildTransportSelector() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -926,7 +1007,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF9B89FF) : Colors.grey[100],
+                color: isSelected ? const Color(0xFF9B89FF) : (isDark ? const Color(0xFF2C2C2C) : Colors.grey[100]),
                 borderRadius: BorderRadius.circular(15),
               ),
               child: Column(
@@ -935,8 +1016,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                   Stack(
                     children: [
                       Icon(
-                        _transportIcons[mode],
-                        color: isSelected ? Colors.white : Colors.grey,
+                        _transportIcons[mode]!,
+                        color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey),
                         size: 20,
                       ),
                       if (_isCalculating && isSelected)
@@ -957,7 +1038,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                     _transportNames[mode]!,
                     style: TextStyle(
                       fontSize: 10,
-                      color: isSelected ? Colors.white : Colors.grey,
+                      color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey),
                     ),
                   ),
                 ],
@@ -979,12 +1060,28 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   Future<void> _openInExternalMap() async {
     try {
       if (_startLocation != null && _destination != null) {
+        // Chuyển đổi sang mode cho Google Maps
+        String googleMode;
+        switch (_transportMode) {
+          case 'car':
+            googleMode = 'driving';
+            break;
+          case 'drive':
+            googleMode = 'driving';
+            break;
+          case 'walk':
+            googleMode = 'walking';
+            break;
+          default:
+            googleMode = 'driving';
+        }
+
         await MapService.openExternalMap(
           _startLocation!.latitude,
           _startLocation!.longitude,
           _destination!.latitude,
           _destination!.longitude,
-          transportMode: _transportMode,
+          transportMode: googleMode,
         );
       }
     } catch (e) {
@@ -994,63 +1091,90 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _searchLocation() async {
-    final result = await showSearch<Map<String, dynamic>?>(
-      context: context,
-      delegate: LocationSearchDelegate(),
-    );
-
-    if (result != null && result.containsKey('lat') && result.containsKey('lng')) {
-      setState(() {
-        _destination = LatLng(result['lat'] as double, result['lng'] as double);
-        _endAddress = result['name'];
-        _isLoading = true;
-      });
-      await _calculateRoute();
-      setState(() => _isLoading = false);
-      if (_isMapReady) {
-        _mapController.move(_destination!, _zoom);
-      }
-    }
-  }
 
   Future<void> _changeStartLocation() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => _StartLocationDialog(
-        currentStart: _startAddress,
-      ),
+      builder: (context) => _StartLocationDialog(currentStart: _startAddress),
     );
 
-    if (result != null) {
-      setState(() => _isLoading = true);
+    if (result == null || !mounted) return;
 
-      try {
-        if (result['type'] == 'current') {
-          final position = await MapService.getCurrentLocation();
-          _startLocation = LatLng(position.latitude, position.longitude);
-          _startAddress = 'Vị trí hiện tại của bạn';
-        } else if (result['type'] == 'custom' && result['address'] != null) {
-          final location = await MapService.getCoordinatesFromAddress(
-              result['address']);
-          _startLocation = LatLng(location.latitude, location.longitude);
-          _startAddress = result['address'];
-        }
+    setState(() => _isLoading = true);
 
-        if (_startLocation != null && _destination != null) {
-          await _calculateRoute();
-        }
+    try {
+      if (result['type'] == 'current') {
+        final position = await MapService.getCurrentLocation();
+        _startLocation = LatLng(position.latitude, position.longitude);
+        _startAddress = 'Vị trí hiện tại của bạn';
+        _currentLocation = _startLocation;
+      } else if (result['type'] == 'custom' && result['address'] != null) {
+        final location = await MapService.getCoordinatesFromAddress(result['address']);
+        _startLocation = LatLng(location.latitude, location.longitude);
+        _startAddress = result['address'];
+        _currentLocation = _startLocation;
+      }
 
-        setState(() => _isLoading = false);
-      } catch (e) {
-        setState(() => _isLoading = false);
+      if (_startLocation != null && _destination != null) {
+        await _calculateRoute();
+      }
+
+      // ✅ Sửa lỗi dispose
+      if (mounted && _isMapReady && _startLocation != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _isMapReady) {
+            _mapController.move(_startLocation!, _zoom);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi thay đổi điểm bắt đầu: $e')),
+          SnackBar(content: Text('Lỗi: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+  Future<void> _changeDestination() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _DestinationDialog(currentEnd: _endAddress),
+    );
 
+    if (result == null || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      if (result['type'] == 'custom' && result['address'] != null) {
+        final location =
+        await MapService.getCoordinatesFromAddress(result['address']);
+
+        _destination = LatLng(location.latitude, location.longitude);
+        _endAddress = result['address'];
+      }
+
+      if (_startLocation != null && _destination != null) {
+        await _calculateRoute();
+      }
+
+      if (mounted && _isMapReady && _destination != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _isMapReady) {
+            _mapController.move(_destination!, _zoom);
+          }
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
   void _moveToCurrentLocation() {
     if (_currentLocation != null && _isMapReady) {
       _mapController.move(_currentLocation!, _zoom);
@@ -1058,65 +1182,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 }
 
-class LocationSearchDelegate extends SearchDelegate<Map<String, dynamic>?> {
-  @override
-  List<Widget> buildActions(BuildContext context) {
-    return [
-      IconButton(
-        icon: const Icon(Icons.clear),
-        onPressed: () {
-          query = '';
-        },
-      ),
-    ];
-  }
-
-  @override
-  Widget buildLeading(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.arrow_back),
-      onPressed: () {
-        close(context, null);
-      },
-    );
-  }
-
-  @override
-  Widget buildResults(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: MapService.searchLocation(query),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('Không tìm thấy kết quả'));
-        }
-        final results = snapshot.data!;
-        return ListView.builder(
-          itemCount: results.length,
-          itemBuilder: (context, index) {
-            final location = results[index];
-            return ListTile(
-              leading: const Icon(Icons.location_on, color: Colors.red),
-              title: Text(location['name'] ?? 'Không có tên'),
-              subtitle: Text(
-                  '${location['lat'].toStringAsFixed(4)}, ${location['lng'].toStringAsFixed(4)}'),
-              onTap: () {
-                close(context, location);
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    return Container();
-  }
-}
 
 class _StartLocationDialog extends StatefulWidget {
   final String? currentStart;
@@ -1126,7 +1191,65 @@ class _StartLocationDialog extends StatefulWidget {
   @override
   State<_StartLocationDialog> createState() => __StartLocationDialogState();
 }
+class _DestinationDialog extends StatefulWidget {
+  final String? currentEnd;
 
+  const _DestinationDialog({this.currentEnd});
+
+  @override
+  State<_DestinationDialog> createState() => __DestinationDialogState();
+}
+
+class __DestinationDialogState extends State<_DestinationDialog> {
+  final TextEditingController _addressController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Chọn điểm kết thúc'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _addressController,
+            decoration: const InputDecoration(
+              labelText: 'Nhập điểm đến',
+              hintText: 'Ví dụ: FLC Sầm Sơn',
+            ),
+          ),
+          if (widget.currentEnd != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Text(
+                'Hiện tại: ${widget.currentEnd}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Hủy'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final result = {
+              'type': 'custom',
+              'address': _addressController.text,
+            };
+            Navigator.pop(context, result);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF9B89FF),
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Xác nhận'),
+        ),
+      ],
+    );
+  }
+}
 class __StartLocationDialogState extends State<_StartLocationDialog> {
   final TextEditingController _addressController = TextEditingController();
   int _selectedOption = 0;
@@ -1191,6 +1314,7 @@ class __StartLocationDialogState extends State<_StartLocationDialog> {
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF9B89FF),
+            foregroundColor: Colors.white,
           ),
           child: const Text('Xác nhận'),
         ),

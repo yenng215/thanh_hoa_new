@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
 import 'register_page.dart';
 import 'reset_password_page.dart';
-
+import '../services/settings_service.dart';
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -86,6 +86,9 @@ class _LoginPageState extends State<LoginPage> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+      final settingsService = Provider.of<SettingsService>(context, listen: false);
+      await settingsService.loadSettings();
+
       // Nếu thành công, AuthService sẽ tự động chuyển trang
     } catch (e) {
       String errorMessage = e.toString();
@@ -145,6 +148,8 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await Provider.of<AuthService>(context, listen: false).signInWithGoogle();
+      final settingsService = Provider.of<SettingsService>(context, listen: false);
+      await settingsService.loadSettings();
     } catch (e) {
       String errorMessage = e.toString();
       if (e is FirebaseAuthException) {
@@ -161,7 +166,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FFFE),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -267,6 +272,7 @@ class _LoginPageState extends State<LoginPage> {
                           setState(() => _errorMessage = null);
                         }
                       },
+                      style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Email',
                         labelStyle: const TextStyle(color: Colors.grey),
@@ -305,6 +311,7 @@ class _LoginPageState extends State<LoginPage> {
                           setState(() => _errorMessage = null);
                         }
                       },
+                      style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
                         labelStyle: const TextStyle(color: Colors.grey),

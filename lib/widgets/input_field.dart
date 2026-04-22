@@ -1,5 +1,6 @@
 // lib/widgets/input_field.dart
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -8,12 +9,14 @@ import 'package:permission_handler/permission_handler.dart';
 class InputField extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
+  final Function(File? image, {String? question})? onImageSelected;
   final bool isLoading;
 
   const InputField({
     super.key,
     required this.controller,
     required this.onSend,
+    this.onImageSelected,
     this.isLoading = false,
   });
 
@@ -26,6 +29,7 @@ class _InputFieldState extends State<InputField> {
   bool _speechEnabled = false;
   bool _isListening = false;
   String _currentLocaleId = 'vi_VN';
+  File? _selectedImage;
 
   @override
   void initState() {
@@ -36,8 +40,6 @@ class _InputFieldState extends State<InputField> {
 
   Future<void> _initSpeech() async {
     try {
-      debugPrint('Initializing speech recognition...');
-
       _speechEnabled = await _speechToText.initialize(
         onError: (error) {
           debugPrint('Speech error: ${error.errorMsg}');
@@ -53,9 +55,6 @@ class _InputFieldState extends State<InputField> {
 
       if (_speechEnabled) {
         final locales = await _speechToText.locales();
-        debugPrint('Available locales: $locales');
-
-        // Tìm locale tiếng Việt
         final viLocale = locales.firstWhere(
               (locale) => locale.localeId.startsWith('vi'),
           orElse: () => locales.firstWhere(
@@ -64,7 +63,6 @@ class _InputFieldState extends State<InputField> {
           ),
         );
         _currentLocaleId = viLocale.localeId;
-        debugPrint('Selected locale: $_currentLocaleId');
       }
     } catch (e) {
       debugPrint('Init speech error: $e');
@@ -73,16 +71,11 @@ class _InputFieldState extends State<InputField> {
   }
 
   void _setListening(bool listening) {
-    if (mounted) {
-      setState(() {
-        _isListening = listening;
-      });
-    }
+    if (mounted) setState(() => _isListening = listening);
   }
 
   Future<void> _startListening() async {
     try {
-      // 1. Kiểm tra và xin quyền
       var permissionStatus = await Permission.microphone.status;
 
       if (permissionStatus.isDenied) {
@@ -117,44 +110,27 @@ class _InputFieldState extends State<InputField> {
         return;
       }
 
-      if (!permissionStatus.isGranted) {
-        debugPrint('Microphone permission not granted');
-        return;
-      }
+      if (!permissionStatus.isGranted) return;
 
-      // 2. Kiểm tra speech engine
       if (!_speechEnabled) {
         final available = await _speechToText.initialize();
         if (!available) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Không thể khởi động nhận dạng giọng nói. '
-                      'Vui lòng kiểm tra:\n'
-                      '1. Đã cài đặt Google Speech Services\n'
-                      '2. Đã tải gói ngôn ngữ Tiếng Việt\n'
-                      '3. Có kết nối internet',
-                ),
-                duration: Duration(seconds: 4),
-              ),
+              const SnackBar(content: Text('Không thể khởi động nhận dạng giọng nói')),
             );
           }
           return;
         }
       }
 
-      // 3. Bắt đầu nghe
       await _speechToText.listen(
         onResult: (result) {
           if (mounted) {
-            // Cập nhật textfield ngay lập tức
             widget.controller.text = result.recognizedWords;
             widget.controller.selection = TextSelection.fromPosition(
               TextPosition(offset: widget.controller.text.length),
             );
-
-            // Tự động dừng nếu là kết quả cuối
             if (result.finalResult) {
               _stopListening();
             }
@@ -168,9 +144,7 @@ class _InputFieldState extends State<InputField> {
         listenMode: stt.ListenMode.confirmation,
       );
 
-      if (mounted) {
-        setState(() => _isListening = true);
-      }
+      if (mounted) setState(() => _isListening = true);
     } catch (e) {
       debugPrint('Error starting listening: $e');
       _setListening(false);
@@ -186,54 +160,148 @@ class _InputFieldState extends State<InputField> {
     }
   }
 
-  /// Xử lý gửi tin nhắn
   void _handleSend() {
     if (widget.isLoading) return;
 
     final text = widget.controller.text.trim();
+
+    if (_selectedImage != null) {
+      if (widget.onImageSelected != null) {
+        widget.onImageSelected!(_selectedImage, question: text.isNotEmpty ? text : null);
+      }
+      widget.controller.clear();
+      _clearSelectedImage();
+      FocusScope.of(context).unfocus();
+      return;
+    }
+
     if (text.isNotEmpty) {
-      debugPrint('Sending message: $text');
       widget.onSend();
       widget.controller.clear();
       FocusScope.of(context).unfocus();
     }
   }
 
-  /// Bottom sheet cho icon +
-  void _showOptionsBottomSheet(BuildContext context) {
+  Future<void> _takePhoto() async {
+    try {
+      final permissionStatus = await Permission.camera.request();
+
+      if (!permissionStatus.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cần cấp quyền camera để chụp ảnh')),
+          );
+        }
+        return;
+      }
+
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null && mounted) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error taking photo: $e');
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null && mounted) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
+  }
+
+  void _clearSelectedImage() {
+    setState(() {
+      _selectedImage = null;
+    });
+  }
+
+  void _showImageOptions(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        height: 160,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.photo_library, color: Color(0xFF9B89FF)),
-              title: const Text('Thư viện ảnh'),
-              onTap: () async {
-                final picker = ImagePicker();
-                final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-                if (pickedFile != null) {
-                  debugPrint('Ảnh chọn từ thư viện: ${pickedFile.path}');
-                  // TODO: Xử lý ảnh ở đây
-                }
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF9B89FF), size: 28),
+              title: Text(
+                'Chụp ảnh',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              subtitle: Text(
+                'Chụp ảnh mới từ camera',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              onTap: () {
                 Navigator.pop(context);
+                _takePhoto();
               },
             ),
+            const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.camera_alt, color: Color(0xFF9B89FF)),
-              title: const Text('Chụp ảnh'),
-              onTap: () async {
-                final picker = ImagePicker();
-                final pickedFile = await picker.pickImage(source: ImageSource.camera);
-                if (pickedFile != null) {
-                  debugPrint('Ảnh chụp: ${pickedFile.path}');
-                  // TODO: Xử lý ảnh ở đây
-                }
+              leading: const Icon(Icons.photo_library, color: Color(0xFF9B89FF), size: 28),
+              title: Text(
+                'Chọn từ thư viện',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              subtitle: Text(
+                'Chọn ảnh có sẵn trong máy',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              onTap: () {
                 Navigator.pop(context);
+                _pickImageFromGallery();
               },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -242,88 +310,153 @@ class _InputFieldState extends State<InputField> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 3,
-            offset: const Offset(0, -1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Icon +
-          IconButton(
-            icon: const Icon(Icons.add, color: Color(0xFF9B89FF)),
-            onPressed: () => _showOptionsBottomSheet(context),
-          ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-          // Icon Microphone
-          Stack(
-            children: [
-              IconButton(
-                icon: Icon(
-                  _isListening ? Icons.mic : Icons.mic_none,
-                  color: _isListening ? Colors.red : const Color(0xFF9B89FF),
-                  size: 28,
-                ),
-                onPressed: _isListening ? _stopListening : _startListening,
+    return Column(
+      children: [
+        if (_selectedImage != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
               ),
-              if (_isListening)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      _selectedImage!,
+                      width: 110,
+                      height: 110,
+                      fit: BoxFit.cover,
                     ),
                   ),
-                ),
-            ],
-          ),
-
-          // Ô nhập văn bản
-          Expanded(
-            child: TextField(
-              controller: widget.controller,
-              maxLines: null,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _handleSend(),
-              decoration: InputDecoration(
-                hintText: _isListening ? 'Đang nghe...' : 'Nhập câu hỏi của bạn...',
-                hintStyle: TextStyle(
-                  color: _isListening ? Colors.red : Colors.grey,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: _clearSelectedImage,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          shape: BoxShape.circle,
+                        ),
+                        padding: const EdgeInsets.all(6),
+                        child: const Icon(Icons.close, color: Colors.white, size: 18),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Chưa gửi',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // Icon gửi
-          IconButton(
-            icon: widget.isLoading
-                ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Color(0xFF9B89FF),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withOpacity(0.3)
+                    : Colors.grey.withOpacity(0.2),
+                spreadRadius: 1,
+                blurRadius: 3,
+                offset: const Offset(0, -1),
               ),
-            )
-                : const Icon(Icons.send, color: Color(0xFF9B89FF)),
-            onPressed: widget.isLoading ? null : _handleSend,
+            ],
           ),
-        ],
-      ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.add_photo_alternate, color: Color(0xFF9B89FF)),
+                onPressed: () => _showImageOptions(context),
+              ),
+              Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      color: _isListening ? Colors.red : const Color(0xFF9B89FF),
+                      size: 28,
+                    ),
+                    onPressed: _isListening ? _stopListening : _startListening,
+                  ),
+                  if (_isListening)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              Expanded(
+                child: TextField(
+                  controller: widget.controller,
+                  maxLines: null,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _handleSend(),
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: _isListening
+                        ? 'Đang nghe...'
+                        : (_selectedImage != null
+                        ? 'Nhập câu hỏi về ảnh này...'
+                        : 'Nhập câu hỏi hoặc chọn ảnh...'),
+                    hintStyle: TextStyle(
+                      color: _isListening
+                          ? Colors.red
+                          : (isDark ? Colors.grey[500] : Colors.grey),
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: widget.isLoading
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF9B89FF),
+                  ),
+                )
+                    : const Icon(Icons.send, color: Color(0xFF9B89FF)),
+                onPressed: widget.isLoading ? null : _handleSend,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

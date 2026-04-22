@@ -175,14 +175,16 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FFFE),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'Thời tiết',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF9B89FF),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -201,19 +203,34 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
             child: Container(
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: isDark ? Colors.grey[800] : Colors.white,
                 borderRadius: BorderRadius.circular(22),
+
               ),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 15,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Tìm kiếm địa điểm...',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white),
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.white: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: isDark ? Colors.white: Colors.grey[400],
+                    size: 20,
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.white),
+                    icon: Icon(
+                      Icons.clear,
+                      color: isDark ? Colors.white.withOpacity(0.8) : Colors.grey[400],
+                      size: 18,
+                    ),
                     onPressed: () {
                       setState(() {
                         _searchController.clear();
@@ -223,7 +240,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                   )
                       : null,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                 ),
                 onChanged: _searchLocation,
                 onSubmitted: _searchLocation,
@@ -329,7 +346,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                           ),
                           margin: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
@@ -398,8 +415,9 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                                       ),
                                       title: Text(
                                         _truncateLocation(location['name'].toString().split(',').first, maxLength: 30),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w600,
+                                          color: isDark ? Colors.white : Colors.black,
                                         ),
                                       ),
                                       subtitle: Text(
@@ -408,7 +426,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Colors.grey[600],
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                                         ),
                                       ),
                                       trailing: Container(
@@ -433,7 +451,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey[50],
+                                  color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
                                   borderRadius: const BorderRadius.vertical(
                                     bottom: Radius.circular(20),
                                   ),
@@ -445,7 +463,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                                       'Tìm thấy ${_searchResults.length} địa điểm',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: Colors.grey[600],
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
                                       ),
                                     ),
                                   ],
@@ -467,6 +485,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
 
   // 🌟 WIDGET LƯU Ý DU LỊCH
   Widget _buildTravelWarning() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_weatherData == null) return const SizedBox();
 
     final temp = _weatherData!['main']['temp'];
@@ -548,7 +567,9 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: isDark
+            ? null
+            : LinearGradient(
           colors: [
             warningColor.withOpacity(0.1),
             warningColor.withOpacity(0.05),
@@ -557,6 +578,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        color: isDark ? const Color(0xFF1E1E1E) : null,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: warningColor.withOpacity(0.3),
@@ -602,7 +624,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
               warning,
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey[800],
+                color: isDark ? Colors.grey[300] : Colors.grey[800],
                 height: 1.4,
               ),
             ),
@@ -613,15 +635,17 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
   }
 
   Widget _buildLocationHeader() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      width: double.infinity, // ✅ Chiếm toàn bộ chiều ngang
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: isDark ? Colors.black26 : Colors.grey.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -635,9 +659,10 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
           Expanded(
             child: Text(
               _currentLocation,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black,
               ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
@@ -812,6 +837,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
   }
 
   Widget _buildHourlyForecast() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final list = _forecastData!['list'] as List;
     final hourly = list.take(8).toList();
 
@@ -831,11 +857,12 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                 child: const Icon(Icons.access_time, color: Color(0xFF9B89FF), size: 18),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Dự báo theo giờ',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
             ],
@@ -857,18 +884,11 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                 width: 80,
                 margin: const EdgeInsets.only(right: 12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white,
-                      Colors.white.withOpacity(0.9),
-                    ],
-                  ),
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                   borderRadius: BorderRadius.circular(25),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.15),
+                      color: isDark ? Colors.black26 : Colors.grey.withOpacity(0.15),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -879,10 +899,10 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                   children: [
                     Text(
                       DateFormat('HH:mm').format(dt),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: Color(0xFF9B89FF),
+                        color: isDark ? Colors.white : const Color(0xFF9B89FF),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -894,9 +914,10 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                     const SizedBox(height: 8),
                     Text(
                       '$temp°',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
+                        color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
                     if (pop > 0)
@@ -911,7 +932,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                           '${(pop * 100).round()}%',
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.blue[700],
+                            color: isDark ? Colors.blue[300] : Colors.blue[700],
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -927,6 +948,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
   }
 
   Widget _buildDailyForecast() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final list = _forecastData!['list'] as List;
 
     final Map<String, dynamic> dailyMap = {};
@@ -961,11 +983,12 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                 child: const Icon(Icons.calendar_today, color: Color(0xFF9B89FF), size: 18),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Dự báo 5 ngày tới',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
             ],
@@ -973,11 +996,11 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: BorderRadius.circular(25),
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.15),
+                color: isDark ? Colors.black26 : Colors.grey.withOpacity(0.15),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
               ),
@@ -989,7 +1012,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
             itemCount: daily.length,
             separatorBuilder: (context, index) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Divider(height: 1, color: Colors.grey[200]),
+              child: Divider(height: 1, color: isDark ? Colors.grey[800] : Colors.grey[200]),
             ),
             itemBuilder: (context, index) {
               final item = daily[index];
@@ -1011,7 +1034,9 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                         index == 0 ? 'Hôm nay' : DateFormat('E').format(dt),
                         style: TextStyle(
                           fontWeight: index == 0 ? FontWeight.bold : FontWeight.normal,
-                          color: index == 0 ? const Color(0xFF9B89FF) : Colors.black,
+                          color: index == 0
+                              ? const Color(0xFF9B89FF)
+                              : (isDark ? Colors.white : Colors.black),
                         ),
                       ),
                     ),
@@ -1023,7 +1048,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                         DateFormat('dd/MM').format(dt),
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
                       ),
                     ),
@@ -1044,7 +1069,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.grey[700],
+                          color: isDark ? Colors.grey[400] : Colors.grey[700],
                           fontSize: 13,
                         ),
                       ),
@@ -1062,13 +1087,13 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.water_drop, color: Colors.blue[400], size: 12),
+                            Icon(Icons.water_drop, color: isDark ? Colors.blue[300] : Colors.blue[400], size: 12),
                             const SizedBox(width: 2),
                             Text(
                               '${(pop * 100).round()}%',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Colors.blue[700],
+                                color: isDark ? Colors.blue[300] : Colors.blue[700],
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1080,14 +1105,15 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
+                        color: isDark ? Colors.grey[800] : Colors.grey[100],
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Text(
                         '$tempMax°/$tempMin°',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
+                          color: isDark ? Colors.white : Colors.black,
                         ),
                       ),
                     ),
@@ -1102,6 +1128,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
   }
 
   Widget _buildWeatherDetails() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_weatherData == null) return const SizedBox();
 
     final windSpeed = (_weatherData!['wind']['speed'] * 3.6).round();
@@ -1128,11 +1155,12 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                 child: const Icon(Icons.info_outline, color: Color(0xFF9B89FF), size: 18),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Chi tiết thời tiết',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
             ],
@@ -1141,11 +1169,11 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: BorderRadius.circular(25),
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.15),
+                color: isDark ? Colors.black26 : Colors.grey.withOpacity(0.15),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
               ),
@@ -1210,6 +1238,8 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
     String? subValue,
     required Color iconColor,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Row(
       children: [
         Container(
@@ -1229,14 +1259,15 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
               ),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
               if (subValue != null)
@@ -1244,7 +1275,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
                   subValue,
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.grey[500],
+                    color: isDark ? Colors.grey[500] : Colors.grey[500],
                   ),
                 ),
             ],
@@ -1255,6 +1286,8 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
   }
 
   Widget _buildErrorWidget() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1277,9 +1310,10 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white : Colors.black,
               ),
             ),
             const SizedBox(height: 16),
@@ -1287,6 +1321,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
               onPressed: _loadWeatherData,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF9B89FF),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(30),

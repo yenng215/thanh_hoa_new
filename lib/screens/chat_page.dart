@@ -1,6 +1,7 @@
 // lib/screens/chat_page.dart
 
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/chatbot_service.dart';
@@ -45,7 +46,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
   Future<void> _initializeChat() async {
     if (widget.sessionId != null) {
-      _currentSessionId = widget.sessionId;
+      _currentSessionId = widget.sessionId;//// Mở từ lịch sử → tải lại hội thoại cũ
       _hasSavedToHistory = true;
       await _loadChatHistory();
     } else {
@@ -64,15 +65,85 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     _scrollToBottom();
   }
 
+  // Kiểm tra kết nối internet
+  Future<bool> _checkInternet() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 5));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Hiện dialog thông báo mất mạng
+  void _showNoInternetDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF2C2C2C)
+            : Colors.white,
+        title: const Row(
+          children: [
+            Icon(Icons.wifi_off_rounded, color: Colors.red, size: 26),
+            SizedBox(width: 10),
+            Text(
+              'Mất kết nối mạng',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Vui lòng kiểm tra lại kết nối Wi-Fi hoặc dữ liệu di động rồi thử lại.',
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white70
+                : Colors.black87,
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9B89FF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _sendImage(File image, {String? question}) async {
     if (_isLoading || _isTyping) return;
 
+    // Kiểm tra mạng trước
+    final hasInternet = await _checkInternet();
+    if (!hasInternet) {
+      _showNoInternetDialog();
+      return;
+    }
+
+    // Lưu session vào lịch sử
     if (!_hasSavedToHistory && _messages.isEmpty) {
-      await _chatbotService.saveSessionToHistory(
-        sessionId: _currentSessionId!,
-        title: question?.isNotEmpty == true ? question! : '[Hình ảnh]',
-      );
-      _hasSavedToHistory = true;
+      try {
+        await _chatbotService.saveSessionToHistory(
+          sessionId: _currentSessionId!,
+          title: question?.isNotEmpty == true ? question! : '[Hình ảnh]',
+        ).timeout(const Duration(seconds: 5));
+        _hasSavedToHistory = true;
+      } catch (_) {
+      }
     }
 
     final userMessage = {
@@ -92,18 +163,22 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
     _scrollToBottom();
 
-    await _chatbotService.saveMessage(
-      sessionId: _currentSessionId!,
-      text: question?.isNotEmpty == true ? question! : '[Hình ảnh]',
-      isUser: true,
-    );
+    // Lưu tin nhắn user
+    try {
+      await _chatbotService.saveMessage(
+        sessionId: _currentSessionId!,
+        text: question?.isNotEmpty == true ? question! : '[Hình ảnh]',
+        isUser: true,
+      ).timeout(const Duration(seconds: 5));
+    } catch (_) {
+    }
 
     try {
       final response = await _chatbotService.generateResponseWithImage(
         image: image,
         sessionId: _currentSessionId!,
         question: question,
-      );
+      ).timeout(const Duration(seconds: 30));
 
       final botMessage = {
         'text': response,
@@ -117,35 +192,59 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
         _isTyping = false;
       });
 
-      await _chatbotService.saveMessage(
-        sessionId: _currentSessionId!,
-        text: response,
-        isUser: false,
-      );
+      // Lưu tin nhắn bot (bỏ qua nếu offline)
+      try {
+        await _chatbotService.saveMessage(
+          sessionId: _currentSessionId!,
+          text: response,
+          isUser: false,
+        ).timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Offline: bỏ qua
+      }
 
       _scrollToBottom();
     } catch (e) {
-      print('Lỗi xử lý ảnh: $e');
       setState(() {
         _isTyping = false;
       });
 
-      final errorMessage = {
-        'text': 'Xin lỗi, tôi không thể xử lý hình ảnh này. Vui lòng thử lại sau.',
-        'isUser': false,
-        'created': DateTime.now().toIso8601String(),
-        'timestamp': DateTime.now(),
-      };
+      final isTimeout = e.toString().contains('TimeoutException') ||
+          e.toString().contains('timeout');
+      final errorText = isTimeout
+          ? 'Không có kết nối mạng. Vui lòng kiểm tra lại internet và thử lại!'
+          : 'Không thể xử lý hình ảnh. Vui lòng thử lại sau!';
 
-      setState(() {
-        _messages.add(errorMessage);
-      });
-
-      await _chatbotService.saveMessage(
-        sessionId: _currentSessionId!,
-        text: errorMessage['text'] as String,
-        isUser: false,
-      );
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Icon(
+                  isTimeout ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
+                  color: const Color(0xFF9B89FF),
+                ),
+                const SizedBox(width: 8),
+                const Text('Thông báo', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Text(errorText),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9B89FF),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Đóng'),
+              ),
+            ],
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -157,12 +256,23 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     final text = _controller.text.trim();
     if (text.isEmpty || _isLoading || _isTyping) return;
 
+    // Kiểm tra mạng trước
+    final hasInternet = await _checkInternet();
+    if (!hasInternet) {
+      _showNoInternetDialog();
+      return;
+    }
+
+    // Lưu session vào lịch sử
     if (!_hasSavedToHistory && _messages.isEmpty) {
-      await _chatbotService.saveSessionToHistory(
-        sessionId: _currentSessionId!,
-        title: text,
-      );
-      _hasSavedToHistory = true;
+      try {
+        await _chatbotService.saveSessionToHistory(
+          sessionId: _currentSessionId!,
+          title: text,
+        ).timeout(const Duration(seconds: 5));
+        _hasSavedToHistory = true;
+      } catch (_) {
+      }
     }
 
     final userMessage = {
@@ -181,21 +291,25 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
     _scrollToBottom();
 
-    await _chatbotService.saveMessage(
-      sessionId: _currentSessionId!,
-      text: text,
-      isUser: true,
-    );
+    // Lưu tin nhắn user
+    try {
+      await _chatbotService.saveMessage(
+        sessionId: _currentSessionId!,
+        text: text,
+        isUser: true,
+      ).timeout(const Duration(seconds: 5));
+    } catch (_) {
+    }
 
     try {
       final response = await _chatbotService.generateResponse(
         question: text,
         sessionId: _currentSessionId!,
-      );
+      ).timeout(const Duration(seconds: 30));
 
       String? mapDestination;
       String finalResponse = response;
-
+// Xử lý map destination
       final mapRegex = RegExp(r'\[MAP:(.+?)\]');
       final match = mapRegex.firstMatch(response);
       if (match != null) {
@@ -216,36 +330,60 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
         _isTyping = false;
       });
 
-      await _chatbotService.saveMessage(
-        sessionId: _currentSessionId!,
-        text: finalResponse,
-        isUser: false,
-        mapDestination: mapDestination,
-      );
+      // Lưu tin nhắn bot
+      try {
+        await _chatbotService.saveMessage(
+          sessionId: _currentSessionId!,
+          text: finalResponse,
+          isUser: false,
+          mapDestination: mapDestination,
+        ).timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Offline: bỏ qua
+      }
 
       _scrollToBottom();
     } catch (e) {
-      print('Lỗi gửi tin nhắn: $e');
       setState(() {
         _isTyping = false;
       });
 
-      final errorMessage = {
-        'text': 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.',
-        'isUser': false,
-        'created': DateTime.now().toIso8601String(),
-        'timestamp': DateTime.now(),
-      };
+      final isTimeout = e.toString().contains('TimeoutException') ||
+          e.toString().contains('timeout');
+      final errorText = isTimeout
+          ? 'Không có kết nối mạng. Vui lòng kiểm tra lại internet và thử lại!'
+          : 'Đã có lỗi xảy ra. Vui lòng thử lại sau!';
 
-      setState(() {
-        _messages.add(errorMessage);
-      });
-
-      await _chatbotService.saveMessage(
-        sessionId: _currentSessionId!,
-        text: errorMessage['text'] as String,
-        isUser: false,
-      );
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Icon(
+                  isTimeout ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
+                  color: const Color(0xFF9B89FF),
+                ),
+                const SizedBox(width: 8),
+                const Text('Thông báo', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Text(errorText),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9B89FF),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Đóng'),
+              ),
+            ],
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;

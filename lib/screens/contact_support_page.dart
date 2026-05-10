@@ -92,7 +92,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
           _buildContactCard(
             icon: Icons.email_outlined,
             title: 'Email hỗ trợ',
-            content: 'support@thanhhoatravel.com',
+            content: 'thanhhoa.support@gmail.com',
             color: Colors.blue,
             onTap: () => _launchEmail(),
           ),
@@ -127,10 +127,9 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
             answer: 'Hoàn toàn miễn phí! Bạn có thể sử dụng tất cả tính năng mà không mất bất kỳ chi phí nào.',
           ),
 
-
           _buildFAQItem(
             question: 'Tôi muốn báo lỗi hoặc góp ý?',
-            answer: 'Bạn có thể sử dụng form "Gửi phản hồi" bên dưới hoặc gửi email trực tiếp đến support@thanhhoatravel.com',
+            answer: 'Bạn có thể sử dụng form "Gửi phản hồi" bên dưới hoặc gửi email trực tiếp đến thanhhoa.support@gmail.com',
           ),
 
           _buildFAQItem(
@@ -236,7 +235,6 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
           const SizedBox(height: 15),
 
           Container(
-
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
@@ -335,6 +333,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     required Color color,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -367,6 +366,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
   }
 
   Widget _buildFAQItem({required String question, required String answer}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -396,7 +396,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
             child: Text(
               answer,
               style: TextStyle(
-                color: Colors.grey[600],
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
                 fontSize: 13,
               ),
             ),
@@ -441,29 +441,54 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     );
   }
 
+  // ✅ SỬA HÀM NÀY - Mở email đúng cách
   Future<void> _launchEmail() async {
-    final email = 'support@thanhhoatravel.com';
-    final url = 'mailto:$email?subject=Hỗ trợ từ người dùng';
+    final email = 'thanhhoa.support@gmail.com';
+    final subject = 'Hỗ trợ từ người dùng Thanh Hóa Travel';
+    final body = '''
+Xin chào đội ngũ hỗ trợ,
 
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
-    } else {
-      _showSnackBar('Không thể mở ứng dụng email');
+Tôi muốn gửi phản hồi/đóng góp về ứng dụng Thanh Hóa Travel Assistant.
+
+---
+Thông tin người dùng:
+- Email: ${FirebaseAuth.instance.currentUser?.email ?? 'Chưa đăng nhập'}
+- Ngày gửi: ${DateTime.now().toString().split(' ')[0]}
+---
+''';
+
+    // Mã hóa URL
+    final encodedSubject = Uri.encodeComponent(subject);
+    final encodedBody = Uri.encodeComponent(body);
+
+    final url = 'mailto:$email?subject=$encodedSubject&body=$encodedBody';
+
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication, // Mở trong ứng dụng email mặc định
+        );
+      } else {
+        _showSnackBar('Không tìm thấy ứng dụng email. Vui lòng cài đặt email.');
+      }
+    } catch (e) {
+      print('Lỗi mở email: $e');
+      _showSnackBar('Không thể mở ứng dụng email: $e');
     }
   }
 
   Future<void> _launchPhone() async {
     final url = 'tel:19001234';
-
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
-    } else {
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+      } else {
+        _showSnackBar('Thiết bị không hỗ trợ gọi điện');
+      }
+    } catch (e) {
       _showSnackBar('Không thể thực hiện cuộc gọi');
     }
-  }
-
-  void _openLiveChat(BuildContext context) {
-    _showSnackBar('Tính năng đang phát triển. Vui lòng gửi email!');
   }
 
   void _launchSocial(String platform) {
@@ -483,7 +508,19 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     }
 
     _showSnackBar('Tính năng đang phát triển $platform...');
-    // TODO: Thực tế sẽ launchUrl
+  }
+
+  Future<void> _launchUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        _showSnackBar('Không thể mở liên kết');
+      }
+    } catch (e) {
+      _showSnackBar('Lỗi: $e');
+    }
   }
 
   Future<void> _sendFeedback() async {
@@ -523,7 +560,8 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

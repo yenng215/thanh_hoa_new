@@ -52,7 +52,7 @@ lib/config/env.dart
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
-
+**/google-services.json
 # Flutter/Dart
 .flutter-plugins
 .packages

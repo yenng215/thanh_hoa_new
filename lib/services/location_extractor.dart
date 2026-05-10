@@ -30,7 +30,6 @@ class LocationExtractor {
     'làm sao để đến',
     'đến như thế nào',
     'hướng dẫn đường',
-    'chỉ đường đến',
     'tìm đường',
     'địa chỉ',
     'vị trí',

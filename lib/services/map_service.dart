@@ -88,7 +88,7 @@ class MapService {
     }
   }
 
-  // Mở chỉ đường trong ứng dụng bản đồ bên ngoài
+  // Mở chỉ đường trong ứng dụng bản đồ
   static Future<void> openExternalMap(
       double startLat,
       double startLng,
@@ -157,7 +157,7 @@ class MapService {
           final geometry = route['geometry'];
           final coordinates = geometry['coordinates'] as List;
 
-          // 🌟 SỬA: Chia đúng cho 1000 để ra km
+          // Chia đúng cho 1000 để ra km
           final distance = route['distance'] / 1000;
           final duration = route['duration'] / 60;
           print('✅ Tìm thấy route: ${distance.toStringAsFixed(1)} km, ${duration.toStringAsFixed(0)} phút');
@@ -201,7 +201,7 @@ class MapService {
         if (data['routes'] != null && data['routes'].isNotEmpty) {
           final route = data['routes'][0];
 
-          // 🌟 SỬA: Chia đúng cho 1000 để ra km
+          // Chia đúng cho 1000 để ra km
           final distance = route['distance'] / 1000;
           final duration = route['duration'] / 60;
 

@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
+import 'login_page.dart';
+import 'package:thanh_hoa_new/main.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -56,11 +58,18 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = true);
 
     try {
-      await Provider.of<AuthService>(context, listen: false).registerWithEmail(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
+        await Provider.of<AuthService>(context, listen: false).registerWithEmail(
+          _emailController.text.trim(),
+          _passwordController.text.trim(),
+        );
 
+        // ✅ Xóa toàn bộ stack, để AuthWrapper tự chuyển sang ChatPage
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const AuthWrapper()),
+                (route) => false,
+          );
+        }
       // Đăng ký thành công → tài khoản đã tự động đăng nhập (do Firebase)
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -279,13 +288,13 @@ class _RegisterPageState extends State<RegisterPage> {
               const SizedBox(height: 40),
               Center(
                 child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Đã có tài khoản? Đăng nhập',
-                    style: TextStyle(color: Color(0xFF9B89FF)),
+                  onPressed: () => Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginPage()),
+                  ),
+                  child: const Text('Đã có tài khoản? Đăng nhập'),
                   ),
                 ),
-              ),
             ],
           ),
         ),

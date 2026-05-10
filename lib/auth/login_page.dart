@@ -70,7 +70,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
-    // Xóa lỗi cũ khi bắt đầu đăng nhập
     setState(() {
       _errorMessage = null;
     });
@@ -478,7 +477,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     TextButton(
                       onPressed: () {
-                        Navigator.push(
+                        Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (context) => const RegisterPage()),
                         );

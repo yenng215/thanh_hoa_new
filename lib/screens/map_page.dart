@@ -107,7 +107,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // 🌟 HÀM TÍNH KHOẢNG CÁCH
+  // HÀM TÍNH KHOẢNG CÁCH
   double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
     const R = 6371; // Bán kính Trái Đất (km)
 
@@ -126,9 +126,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
   double _toRadians(double degree) => degree * math.pi / 180;
 
-  // 🌟 SỬA: Chỉ theo dõi vị trí thực tế, không tự di chuyển
+  // Chỉ theo dõi vị trí thực tế, không tự di chuyển
   void _startLocationTracking() {
-    // ✅ Nếu đang dùng điểm bắt đầu tùy chỉnh (không phải vị trí thực tế)
     // thì KHÔNG theo dõi vị trí GPS
     if (_startAddress != 'Vị trí hiện tại của bạn' && _startAddress != null) {
       print('📍 Đang dùng điểm bắt đầu tùy chỉnh, không theo dõi GPS');
@@ -138,7 +137,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
+        distanceFilter: 5,// Cập nhật khi di chuyển 5 mét
       ),
     ).listen((Position position) {
       if (!mounted || !_isNavigating) return;
@@ -146,7 +145,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);
         _currentBearing = position.heading;
-        _remainingDistance = _calculateRemainingDistance();
+        _remainingDistance = _calculateRemainingDistance();// Tính lại khoảng cách
 
         if (_isMapReady) {
           _mapController.move(_currentLocation!, _zoom);
@@ -213,7 +212,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     );
   }
 
-  // 🌟 HÀM TÍNH KHOẢNG CÁCH CÒN LẠI
+  // HÀM TÍNH KHOẢNG CÁCH CÒN LẠI
   double _calculateRemainingDistance() {
     if (_polylinePoints.isEmpty || _currentLocation == null) return 0;
 
@@ -337,7 +336,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
     return markers;
   }
-
+// Khởi tạo bản đồ - Hàm chạy đầu tiên khi vào màn hình
   Future<void> _initializeMap() async {
     try {
       await _determineStartLocation();
@@ -360,25 +359,25 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       });
     }
   }
-
+// Xác định ĐIỂM BẮT ĐẦU
   Future<void> _determineStartLocation() async {
-    try {
+    try {//ƯU TIÊN 1: Nếu có tọa độ từ có sẵn (startLat, startLng)
       if (widget.startLat != null && widget.startLng != null) {
         _startLocation = LatLng(widget.startLat!, widget.startLng!);
         if (widget.startLocation != null) {
           _startAddress = widget.startLocation;
         } else {
-          _startAddress = await MapService.getAddressFromCoordinates(
+          _startAddress = await MapService.getAddressFromCoordinates( // Chuyển tọa độ -> địa chỉ
               widget.startLat!, widget.startLng!);
         }
-      }
+      }//ƯU TIÊN 2: Nếu có địa chỉ dạng text
       else if (widget.startLocation != null && widget.startLocation!.isNotEmpty) {
-        final location = await MapService.getCoordinatesFromAddress(
+        final location = await MapService.getCoordinatesFromAddress(// huyển địa chỉ từ câu hỏi thành tọa độ
             widget.startLocation!);
         _startLocation = LatLng(location.latitude, location.longitude);
         _startAddress = widget.startLocation;
       }
-      else {
+      else {// 🔹 ƯU TIÊN 3 (MẶC ĐỊNH): Lấy vị trí GPS hiện tại của người dùng
         final position = await MapService.getCurrentLocation();
         _currentLocation = LatLng(position.latitude, position.longitude);
         _startLocation = _currentLocation;
@@ -444,13 +443,13 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       }
       print('🔄 Đang tính route với phương tiện: $_transportMode (OSRM: $osrmProfile)');
 
-      // ✅ SỬA: Dùng osrmProfile thay vì _transportMode
+
       final polyline = await MapService.getRoutePolyline(
         _startLocation!.latitude,
         _startLocation!.longitude,
         _destination!.latitude,
         _destination!.longitude,
-        transportMode: osrmProfile, // ← Đã sửa
+        transportMode: osrmProfile,
       );
 
       final routeInfo = await MapService.getRouteInfo(

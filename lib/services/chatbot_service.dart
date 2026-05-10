@@ -119,8 +119,8 @@ class ChatbotService {
     }).toList();
   }
 
-  // 📸 Xử lý gửi ảnh - sử dụng Gemini Vision
-  // 📸 Xử lý gửi ảnh - Gọi Gemini Vision để phân tích
+
+  // Xử lý gửi ảnh - Gọi Gemini Vision để phân tích
   Future<String> generateResponseWithImage({
     required File image,
     required String sessionId,
@@ -151,7 +151,7 @@ class ChatbotService {
       final qaData = await FirestoreService.loadQAData();
       final context = _contextService.analyzeContext(question, chatHistory);
       final hasLocalData = qaData.isNotEmpty;
-
+// Tìm câu hỏi liên quan (độ tương đồng ≥ 0.5)
       List<QAPair> relevantData = [];
       if (hasLocalData) {
         relevantData = _findRelevantQA(question, qaData);

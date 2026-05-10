@@ -26,7 +26,7 @@ class _WeatherPageState extends State<WeatherPage> with SingleTickerProviderStat
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Hàm helper để cắt ngắn tên địa điểm
+
   String _truncateLocation(String location, {int maxLength = 25}) {
     if (location.length <= maxLength) return location;
     return '${location.substring(0, maxLength)}...';

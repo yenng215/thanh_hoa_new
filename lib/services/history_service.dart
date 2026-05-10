@@ -17,7 +17,7 @@ class HistoryService {
         .doc(sessionId);
   }
 
-  static CollectionReference _getSessionsRef() {
+  static CollectionReference _getSessionsRef() {//ấy toàn bộ session
     if (_userId == null) throw Exception('User not logged in');
     return _firestore
         .collection('users')
@@ -42,7 +42,7 @@ class HistoryService {
     }
   }
 
-  // Lấy tất cả sessions
+  // Lấy ds tất cả sessions
   static Future<List<Map<String, dynamic>>> getAllSessions() async {
     try {
       final snapshot = await _getSessionsRef()

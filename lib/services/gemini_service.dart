@@ -9,11 +9,9 @@ import '../services/location_extractor.dart';
 
 class GeminiService {
   static const String baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-  // Endpoint cho Gemini Vision (multimodal)
   static const String visionUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
 
-  // 📸 Phân tích ảnh với Gemini Vision
-  // 📸 Phân tích ảnh với Gemini Vision
+  // Phân tích ảnh với Gemini Vision
   Future<String> analyzeImage({
     required File image,
     List<Map<String, dynamic>>? chatHistory,
@@ -24,37 +22,70 @@ class GeminiService {
       final base64Image = base64Encode(bytes);
       final mimeType = _getMimeType(image.path);
 
-      String prompt = """
+      // Xây dựng lịch sử chat gần đây để Gemini hiểu ngữ cảnh
+      String historySection = '';
+      if (chatHistory != null && chatHistory.isNotEmpty) {
+        final recent = chatHistory.reversed.take(6).toList().reversed.toList();
+        final lines = recent.map((m) {
+          final role = m['isUser'] == true ? 'Người dùng' : 'Trợ lý';
+          final text = m['text'].toString().replaceAll(RegExp(r'\[MAP:.+?\]'), '').trim();
+          return '$role: $text';
+        }).where((l) => l.isNotEmpty).join('\n');
+
+        if (lines.isNotEmpty) {
+          historySection = '''
+=== LỊCH SỬ HỘI THOẠI GẦN ĐÂY ===
+$lines
+(Dùng lịch sử này để hiểu ngữ cảnh, KHÔNG lặp lại những gì đã nói)
+''';
+        }
+      }
+      final bool hasQuestion = question != null && question.trim().isNotEmpty;
+      final String prompt = '''
 BẠN LÀ TRỢ LÝ DU LỊCH THANH HÓA THÔNG MINH.
+Trả lời bằng tiếng Việt, thân thiện và tự nhiên.
 
-=== NHIỆM VỤ ===
-Hãy phân tích hình ảnh mà người dùng vừa gửi và trả lời bằng tiếng Việt.
+$historySection
 
-=== HƯỚNG DẪN PHÂN TÍCH ===
-1. NHẬN DIỆN NỘI DUNG CHÍNH TRONG ẢNH:
-   - Nếu là cảnh quan thiên nhiên: xác định đó có thể là địa điểm du lịch nào ở Thanh Hóa (biển, núi, rừng, thác, suối...)
-   - Nếu là công trình kiến trúc: có thể là đền, chùa, di tích lịch sử nào
-   - Nếu là món ăn: đó có thể là đặc sản gì của Thanh Hóa
-   - Nếu là con người: đang làm gì, có liên quan đến du lịch không
+=== HÌNH ẢNH ===
+Người dùng vừa gửi một hình ảnh (đính kèm bên dưới).
 
-2. GIỚI THIỆU THÔNG TIN HỮU ÍCH:
-   - Nếu ảnh liên quan đến địa điểm du lịch: giới thiệu tên, vị trí, đặc điểm nổi bật
-   - Nếu ảnh liên quan đến món ăn: giới thiệu tên món, nơi bán ngon, giá cả tham khảo
-   - Nếu không rõ: nói "Tôi chưa nhận diện được rõ, bạn có thể cho tôi biết thêm về bức ảnh này được không?"
+${hasQuestion ? '''
+=== CÂU HỎI CỦA NGƯỜI DÙNG ===
+"${question!.trim()}"
 
-3. TƯ VẤN THÊM:
-   - Thời điểm thích hợp để đến tham quan (nếu là địa điểm)
-   - Các hoạt động có thể làm tại đó
-   - Lưu ý khi đi du lịch
+=== CÁCH XỬ LÝ ===
+BƯỚC 1 — Nhìn ảnh để hiểu ngữ cảnh (đây là gì: địa điểm, món ăn, sản phẩm, con người, sự kiện...)
+BƯỚC 2 — Đọc kỹ CÂU HỎI bên trên và xác định người dùng muốn biết CHÍNH XÁC điều gì.
+BƯỚC 3 — Trả lời ĐÚNG TRỌNG TÂM câu hỏi đó, dùng ảnh làm ngữ cảnh.
 
-=== QUY TẮC ===
-• KHÔNG BỊA ĐẶT thông tin. Nếu không chắc chắn, hãy nói "Có thể đây là [tên địa điểm gần giống]..."
-• Trả lời thân thiện, tự nhiên như đang trò chuyện
-• Nếu nhận diện được chính xác địa điểm nổi tiếng ở Thanh Hóa, hãy nhiệt tình giới thiệu
-• Độ dài câu trả lời: 2-4 câu là đủ, không cần quá dài
+VÍ DỤ VỀ CÁCH XỬ LÝ ĐÚNG:
+• Ảnh: món ăn | Hỏi: "có quán nào bán không?" → Liệt kê ngay tên quán, địa chỉ cụ thể ở Thanh Hóa
+• Ảnh: địa điểm | Hỏi: "vé vào cửa bao nhiêu?" → Trả lời giá vé, không mô tả phong cảnh
+• Ảnh: sản phẩm | Hỏi: "mua ở đâu?" → Gợi ý nơi mua cụ thể, không giới thiệu sản phẩm
+• Ảnh: lễ hội | Hỏi: "tổ chức khi nào?" → Trả lời thời gian, địa điểm tổ chức
 
-HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
-""";
+QUAN TRỌNG:
+• KHÔNG trả lời lan man theo flow mặc định (nhận diện → giới thiệu → tư vấn) nếu câu hỏi không yêu cầu
+• Nếu câu hỏi hỏi về "nơi", "chỗ", "quán", "cửa hàng", "địa điểm" → phải có tên và địa chỉ CỤ THỂ
+• Nếu không chắc → nói "Bạn có thể tìm ở..." thay vì bịa đặt
+''' : '''
+=== CÁCH XỬ LÝ ===
+Người dùng không kèm câu hỏi. Hãy:
+1. Nhận diện nội dung ảnh (địa điểm, món ăn, sự kiện, sản phẩm...)
+2. Kết nối với du lịch / văn hóa Thanh Hóa nếu có thể
+3. Chủ động gợi ý thông tin hữu ích nhất với khách du lịch
+4. Nếu không nhận ra → hỏi lại người dùng
+Độ dài: 3-5 câu, đừng dài dòng.
+'''}
+
+QUY TẮC CHUNG:
+• KHÔNG bịa đặt thông tin. Nếu không chắc → dùng "có thể", "thường thấy ở", "bạn có thể thử tìm tại..."
+• Không lặp lại thông tin đã nói trong lịch sử chat
+• Trả lời tự nhiên như đang trò chuyện, không liệt kê dạng học thuật
+
+TRẢ LỜI:
+''';
 
       final requestBody = {
         "contents": [
@@ -127,7 +158,7 @@ HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
       // Xây dựng prompt với ngữ cảnh
       String contextPrompt = _buildContextPrompt(chatHistory, context);
 
-      // Chuẩn bị dữ liệu có sẵn (có thể rỗng)
+      // Chuẩn bị dữ liệu có sẵn
       String availableInfo;
       if (availableData.isEmpty) {
         availableInfo = "⚠️ KHÔNG CÓ DỮ LIỆU TỪ FIREBASE. Bạn hãy dựa vào kiến thức của mình để trả lời về du lịch Thanh Hóa.";
@@ -145,7 +176,7 @@ HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
 
       // 🌟 PROMPT MỚI - CHO PHÉP GEMINI TỰ TRẢ LỜI
       final prompt = """
-      BẠN LÀ TRỢ LÝ DU LỊCH THANH HÓA THÔNG MINH, CÓ KHẢ NĂNG HIỂU NGỮ CẢNH.
+      BẠN LÀ TRỢ LÝ DU LỊCH THANH HÓA THÔNG MINH CHỈ TRẢ LỜI CÁC THÔNG TIN VỀ THANH HÓA, CÓ KHẢ NĂNG HIỂU NGỮ CẢNH.
       ${contextPrompt}
 
       === QUY TẮC XỬ LÝ DỮ LIỆU ===
@@ -158,12 +189,9 @@ HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
       1. HIỂU NGỮ CẢNH: Dựa vào chủ đề đang thảo luận và lịch sử trò chuyện
       2. TỰ NHIÊN: Trả lời như đang nói chuyện với người dùng
       3. LIÊN KẾT: Kết hợp nhiều thông tin khi cần
-      4. KHÔNG BỊA ĐẶT: Nếu không chắc chắn, hãy nói "Tôi chưa có thông tin về vấn đề này"
-
-      === HƯỚNG DẪN HIỂU NGỮ CẢNH ===
-      1. Nếu câu hỏi chứa đại từ (đó, đây, chỗ đó, nơi này...): hiểu là đang nói đến địa điểm/chủ đề vừa được nhắc
-      2. Nếu câu hỏi không rõ ràng: dựa vào chủ đề đang thảo luận để hiểu ý
-      3. Nếu là câu hỏi tiếp theo: không lặp lại thông tin đã nói, chỉ bổ sung thêm
+      4. KHÔNG BỊA ĐẶT: Chỉ trả lời đúng điều được hỏi. Không thêm thông tin người dùng không hỏi.Nếu không chắc chắn, hãy nói "Tôi chưa có thông tin về vấn đề này"
+      5. Khi hỏi những câu ngoài Thanh Hóa thì sẽ từ chối trả lời ngay, chỉ trả lời DUY NHẤT câu sau đây, KHÔNG thêm bất kỳ nội dung nào khác:
+   "Mình là trợ lý du lịch Thanh Hóa. Bạn vui lòng hỏi về địa điểm, lịch trình,món ăn,... ở Thanh Hóa nhé!"
 
       === QUY TẮC THÊM MAP TAG [MAP:...] ===
       ${_getMapTagRules(isDirectionQuery, extractedAddress, context)}
@@ -185,7 +213,9 @@ HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
       2. **Nếu KHÔNG có dữ liệu từ Firebase**: 
         - Dùng kiến thức của bạn về du lịch Thanh Hóa
         - Chỉ trả lời những gì bạn biết chắc chắn
-        - Nếu không biết, nói: "Xin lỗi, tôi chưa có thông tin về điều này"
+        - Trả lời đúng trọng tâm câu hỏi, không lan man dài dòng.
+        - Nếu không biết, trả lời TRỰC TIẾP:
+         "Hiện tại tôi chưa cập nhật thông tin về [vấn đề]. Bạn có thể hỏi cụ thể hơn hoặc thử chủ đề khác nhé!"
       3. **Xử lý MAP tag**: Tuân theo quy tắc ở trên
 
       VÍ DỤ MINH HỌA:
@@ -241,7 +271,7 @@ HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
   // Tạo quy tắc MAP tag động
   static String _getMapTagRules(bool isDirectionQuery, String? extractedAddress, ConversationContext context) {
     String rules = "";
-
+//Câu hỏi có chứa từ khóa chỉ đường không
     if (isDirectionQuery && extractedAddress != null) {
       rules = """
       1. ✅ ĐỦ ĐIỀU KIỆN THÊM MAP TAG (yêu cầu chỉ đường + có địa chỉ)
@@ -264,7 +294,6 @@ HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
     return rules;
   }
 
-  // Các hàm còn lại GIỮ NGUYÊN
   String _processMapTag(String response, String question, ConversationContext context, String? extractedAddress) {
     if (response.contains('[MAP:')) {
       return response;
@@ -423,7 +452,7 @@ HÃY PHÂN TÍCH HÌNH ẢNH VÀ TRẢ LỜI:
     if (extractedAddress != null) {
       return extractedAddress;
     }
-
+//Loại bỏ ký tự đặc biệt
     for (var qa in availableData) {
       final processedQuestion = question.toLowerCase()
           .replaceAll(RegExp(r'[^\w\sàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ]'), ' ')

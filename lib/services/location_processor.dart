@@ -12,9 +12,7 @@ class LocationProcessor {
     final directionIndicators = [
       'đi theo',
       'rẽ vào',
-      'đến',
       'cách',
-      'km',
       'quốc lộ',
       'tỉnh lộ',
       'đường',

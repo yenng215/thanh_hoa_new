@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => SettingsService()..loadSettings()),
       ],
-      child: Consumer2<AuthService, SettingsService>(  // ✅ Dùng Consumer2 để lắng nghe cả 2 service
+      child: Consumer2<AuthService, SettingsService>(  // Dùng Consumer2 để lắng nghe cả 2 service
         builder: (context, authService, settingsService, child) {
           final settingsService = Provider.of<SettingsService>(context, listen: false);
 
@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'Thanh Hóa Travel',
             debugShowCheckedModeBanner: false,
-            theme: settingsService.themeData, // ✅ Lấy theme từ SettingsService
+            theme: settingsService.themeData, // Lấy theme từ SettingsService
             builder: (context, child) {
               return MediaQuery(
                 data: MediaQuery.of(context).copyWith(
@@ -61,20 +61,10 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
 
-    // Thêm key để force rebuild khi cần
-    return FutureBuilder(
-      future: Future.delayed(Duration.zero),
-      builder: (context, snapshot) {
-        print('🔐 AuthWrapper - User: ${authService.currentUser?.email ?? 'null'}');
+    if (authService.currentUser == null) {
+      return const LoginPage();
+    }
 
-        if (authService.currentUser == null) {
-          print('➡️ Chuyển đến LoginPage');
-          return const LoginPage();
-        }
-
-        print('➡️ Chuyển đến ChatPage');
-        return const ChatPage();
-      },
-    );
+    return const ChatPage();
   }
 }
